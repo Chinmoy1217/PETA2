@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.venv
+.env
+
+# Large Data Files (Root)
+*.csv
+*.xlsx
+*.model
+*.pkl
+*.joblib
+
+# Exceptions (Allow Normalized Data)
+!backend/data/*.csv
+
+# Allow Source if needed (but ignoring large ones to be safe)
+# !Master_Training_Data_Augmented.csv 
+
+# Editor
+.vscode/
+.idea/

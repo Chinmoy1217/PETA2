@@ -1,0 +1,20 @@
+[
+  {
+    "name": "XGBoost",
+    "accuracy": 95.07,
+    "rmse": 8.05,
+    "r2": 0.9
+  },
+  {
+    "name": "Random Forest",
+    "accuracy": 91.63,
+    "rmse": 13.45,
+    "r2": 0.73
+  },
+  {
+    "name": "Linear Regression",
+    "accuracy": 84.79,
+    "rmse": 24.3,
+    "r2": 0.13
+  }
+]
