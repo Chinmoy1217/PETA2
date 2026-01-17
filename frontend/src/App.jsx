@@ -789,13 +789,28 @@ function UploadView({ API_URL }) {
       const data = await res.json();
       if (data.status === 'success') {
         setIsSynced(true);
-        setStatus('✅ File synced to Azure Blob Storage successfully.');
+        setStatus('✅ File synced to Azure Blob Storage successfully. Ready to Ingest.');
       } else {
         setStatus(`❌ Sync failed: ${data.message}`);
       }
     } catch (err) {
       console.error("Sync Error:", err);
       setStatus(`❌ Sync error: ${err.message}`);
+    }
+  };
+
+  const handleIngest = async () => {
+    try {
+      setStatus('⏳ Triggering Snowflake Ingestion...');
+      const res = await fetch(`${API_URL}/ingest`, { method: 'POST' });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setStatus('✅ Ingestion Triggered! Check Backend Logs for progress.');
+      } else {
+        setStatus(`❌ Ingestion failed: ${data.message}`);
+      }
+    } catch (err) {
+      setStatus(`❌ Ingestion error: ${err.message}`);
     }
   };
 
@@ -849,12 +864,15 @@ function UploadView({ API_URL }) {
             </label>
           </div>
 
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
             {file && !isSynced && (
-              <button className="action-btn" onClick={handleSync} style={{ background: '#f59e0b' }}>Sync to Cloud</button>
+              <button className="action-btn" onClick={handleSync} style={{ background: '#f59e0b' }}>1. Sync to Azure</button>
             )}
             {file && isSynced && (
-              <button className="action-btn" onClick={handleProcess}>Process for Insights</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <button className="action-btn" onClick={handleIngest} style={{ background: '#10b981' }}>2. Ingest to Snowflake</button>
+                <button className="action-btn" onClick={handleProcess} style={{ background: '#3b82f6' }}>3. Process for Insights</button>
+              </div>
             )}
           </div>
 

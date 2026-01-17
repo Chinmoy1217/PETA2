@@ -11,10 +11,10 @@ import numpy as np
 import pickle
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
-from dotenv import load_dotenv
+# from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+# load_dotenv()
 
 class LoginRequest(BaseModel):
     username: str
@@ -37,12 +37,12 @@ from backend.data_loader import DataLoader
 def get_snowflake_connection():
     try:
         conn = snowflake.connector.connect(
-            user=os.getenv("SNOWFLAKE_USER"),
-            password=os.getenv("SNOWFLAKE_PASSWORD"),
-            account=os.getenv("SNOWFLAKE_ACCOUNT"),
-            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
-            database=os.getenv("SNOWFLAKE_DATABASE"),
-            schema=os.getenv("SNOWFLAKE_SCHEMA")
+            user="HACKATHON_DT",
+            password="eyJraWQiOiIxOTMxNTY4MzQxMDAzOTM3OCIsImFsZyI6IkVTMjU2In0.eyJwIjoiMjk0NzMzOTQwNDEzOjI5NDczMzk0MjUzMyIsImlzcyI6IlNGOjIwMTciLCJleHAiOjE3NzEyMjY3MTF9.O0OTFEyQPIqpdCsNuV881UG1RtQQLBMIyUt-0kfESVYaI0J_u3S4fysE7lee7lWMIMoezOhd2t7gUItdoHC0UA",
+            account="COZENTUS-DATAPRACTICE",
+            warehouse="COZENTUS_WH",
+            database="HACAKATHON",
+            schema="DT_INGESTION"
         )
         return conn
     except Exception as e:
@@ -554,43 +554,45 @@ async def upload_to_cloud(
     file: UploadFile = File(...)
 ):
     """
-    Step 1: Sync the uploaded file to Azure Blob Storage.
+    Step 1: Save file locally and Ingest Directly to Snowflake (Skip Azure).
     """
-    def sync_to_azure(file_obj, filename):
-        AZURE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
-        AZURE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER")
-        AZURE_INPUT_FOLDER = os.getenv("AZURE_STORAGE_INPUT_FOLDER", "input")
-        AZURE_SAS_TOKEN = os.getenv("AZURE_STORAGE_SAS_TOKEN")
+    import shutil
+    import os
+    from backend.ingestion_service import ingest_direct_from_file
 
-        if not AZURE_SAS_TOKEN:
-            print("❌ Azure Sync Error: AZURE_STORAGE_SAS_TOKEN not found in environment.")
-            return
+    # Save to temp file
+    temp_dir = "temp_uploads"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, file.filename)
+    
+    try:
+        # Save uploaded file
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        print(f"💾 Saved local file: {temp_path}")
 
-        AZURE_ACCOUNT_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net"
+        # Define background task wrapper
+        def process_ingestion(path):
+            try:
+                ingest_direct_from_file(path)
+            finally:
+                # Cleanup
+                if os.path.exists(path):
+                    os.remove(path)
+                    print(f"🧹 Cleaned up {path}")
+
+        background_tasks.add_task(process_ingestion, temp_path)
         
-        import requests
-        token = AZURE_SAS_TOKEN if AZURE_SAS_TOKEN.startswith('?') else f"?{AZURE_SAS_TOKEN}"
-        url = f"{AZURE_ACCOUNT_URL}/{AZURE_CONTAINER}/{AZURE_INPUT_FOLDER}/{filename}{token}"
+        return {"status": "success", "message": f"Processing {file.filename} directly to Snowflake..."}
         
-        try:
-            file_obj.seek(0)
-            blob_data = file_obj.read()
-            headers = {
-                'x-ms-blob-type': 'BlockBlob',
-                'Content-Type': 'application/octet-stream'
-            }
-            resp = requests.put(url, data=blob_data, headers=headers)
-            if resp.status_code == 201:
-                print(f"✅ Successfully synced {filename} to Azure.")
-            else:
-                print(f"❌ Azure Sync Failed: {resp.status_code}")
-        except Exception as e:
-            print(f"❌ Azure Sync Error: {e}")
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-    # For Hackathon speed, we use a background task for the actual upload 
-    # but return immediate success to the UI to keep the flow moving.
-    background_tasks.add_task(sync_to_azure, file.file, file.filename)
-    return {"status": "success", "message": f"Syncing {file.filename} to Azure Blob Storage..."}
+# DEPRECATED INGEST ENDPOINT - KEPT FOR COMPATIBILITY
+@app.post("/ingest")
+async def trigger_ingestion(background_tasks: BackgroundTasks):
+    return {"status": "success", "message": "Deprecated. Use /upload for direct ingestion."}
 
 @app.post("/predict")
 async def predict_eta(
