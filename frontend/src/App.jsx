@@ -3,7 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area
 } from 'recharts';
-import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download, LogOut, Lock } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -18,15 +18,29 @@ L.Icon.Default.mergeOptions({
 });
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload');
   const [metrics, setMetrics] = useState(null);
   const [plots, setPlots] = useState(null);
   const API_URL = "http://127.0.0.1:8000";
 
   useEffect(() => {
-    fetch(`${API_URL}/metrics`).then(res => res.json()).then(setMetrics);
-    fetch(`${API_URL}/plots`).then(res => res.json()).then(setPlots);
-  }, []);
+    if (isAuthenticated) {
+      fetch(`${API_URL}/metrics`).then(res => res.json()).then(setMetrics);
+      fetch(`${API_URL}/plots`).then(res => res.json()).then(setPlots);
+    }
+  }, [isAuthenticated]);
+
+  const handleLogin = (status) => {
+    if (status) {
+      setIsAuthenticated(true);
+      setActiveTab('upload');
+    }
+  }
+
+  if (!isAuthenticated) {
+    return <LoginView onLogin={handleLogin} API_URL={API_URL} />;
+  }
 
   return (
     <div className="app-container">
@@ -36,6 +50,9 @@ function App() {
           <span>ETA Insight</span>
         </div>
         <ul className="nav-links">
+          <li className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
+            <UploadCloud size={20} /> Data Ingestion
+          </li>
           <li className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
             <LayoutDashboard size={20} /> Dashboard
           </li>
@@ -45,10 +62,13 @@ function App() {
           <li className={`nav-item ${activeTab === 'simulator' ? 'active' : ''}`} onClick={() => setActiveTab('simulator')}>
             <Calculator size={20} /> Trip Simulator
           </li>
-          <li className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
-            <UploadCloud size={20} /> Batch Predict
-          </li>
         </ul>
+
+        <div style={{ marginTop: 'auto', padding: '1rem' }}>
+          <button className="nav-item" onClick={() => setIsAuthenticated(false)} style={{ width: '100%', border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', padding: '10px' }}>
+            <LogOut size={20} /> Logout
+          </button>
+        </div>
       </nav>
 
       <main className="main-content">
@@ -57,7 +77,7 @@ function App() {
             {activeTab === 'dashboard' && 'Operations Overview'}
             {activeTab === 'tracking' && 'Real-Time Tracking'}
             {activeTab === 'simulator' && 'Instant ETA Calculator'}
-            {activeTab === 'upload' && 'Batch Processing'}
+            {activeTab === 'upload' && 'Data Ingestion & Processing'}
           </h1>
           <div className="model-badge">
             <span className="status-dot"></span>
@@ -70,6 +90,194 @@ function App() {
         {activeTab === 'simulator' && <SimulatorView API_URL={API_URL} />}
         {activeTab === 'upload' && <UploadView API_URL={API_URL} />}
       </main>
+    </div>
+  );
+}
+
+function LoginView({ onLogin, API_URL }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showSignup, setShowSignup] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      if (res.ok) {
+        onLogin(true);
+      } else {
+        setError("Authentication failed.");
+      }
+    } catch (err) {
+      setError("Unable to connect to service.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', height: '100vh', width: '100vw', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Background Video */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          zIndex: -1,
+          filter: 'brightness(0.4)'
+        }}
+      >
+        <source src="https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-container-ship-at-sea-4197-large.mp4" type="video/mp4" />
+      </video>
+
+      <div className="glass-card" style={{ width: '420px', padding: '3rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ marginBottom: '2.5rem' }}>
+          <div style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '1.2rem', borderRadius: '50%', display: 'inline-flex', marginBottom: '1.5rem', boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)' }}>
+            <Truck size={40} color="#60a5fa" />
+          </div>
+          <h1 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '2rem', fontWeight: '300', letterSpacing: '1px' }}>Welcome to DataTalks ETA Insights</h1>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div style={{ marginBottom: '1.2rem' }}>
+            <input
+              type="text"
+              className="glass-input"
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem', background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="Username / ID"
+            />
+          </div>
+          <div style={{ marginBottom: '2rem' }}>
+            <input
+              type="password"
+              className="glass-input"
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem', background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+            />
+          </div>
+
+          {error && <div className="error-banner" style={{ marginBottom: '1.5rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444' }}>{error}</div>}
+
+          <button type="submit" className="action-btn" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', letterSpacing: '0.5px' }} disabled={loading}>
+            {loading ? 'Authenticating...' : 'Access Portal'}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1rem' }}>New to the platform?</p>
+          <style>
+            {`
+              .create-acc-btn {
+                width: 100%;
+                padding: 0.8rem;
+                background: transparent;
+                border: 1px solid #475569;
+                color: #94a3b8;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                border-radius: 0.5rem;
+              }
+              .create-acc-btn:hover {
+                border-color: #3b82f6;
+                color: #60a5fa;
+                background: rgba(59, 130, 246, 0.1);
+              }
+              .create-acc-btn:active {
+                border-color: #475569;
+                color: #94a3b8;
+                background: transparent;
+                transform: scale(0.98);
+              }
+            `}
+          </style>
+          <button
+            className="create-acc-btn"
+            onClick={() => setShowSignup(true)}
+          >
+            Create Account
+          </button>
+        </div>
+      </div>
+
+      {/* Signup Modal Popup */}
+      {showSignup && <SignupModal onClose={() => setShowSignup(false)} API_URL={API_URL} />}
+    </div>
+  );
+}
+
+function SignupModal({ onClose, API_URL }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    if (password !== confirm) {
+      setError("Passwords do not match");
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (res.ok) {
+        setMsg("Account created! Please login.");
+        setTimeout(() => onClose(), 2000); // Close after success
+      } else {
+        setError("Registration failed.");
+      }
+    } catch (err) {
+      setError("Service unavailable.");
+    }
+  };
+
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className="glass-card" style={{ width: '350px', padding: '2rem', background: '#1e293b', border: '1px solid #3b82f6' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h2 style={{ margin: 0, color: '#fff' }}>Sign Up</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.5rem' }}>&times;</button>
+        </div>
+
+        {msg ? <div style={{ color: '#10b981', textAlign: 'center', padding: '2rem 0' }}>{msg}</div> : (
+          <form onSubmit={handleSignup}>
+            <div style={{ marginBottom: '1rem' }}>
+              <input type="text" placeholder="Choose Username" value={username} onChange={e => setUsername(e.target.value)} className="glass-input" style={{ width: '100%' }} required />
+            </div>
+            <div style={{ marginBottom: '1rem' }}>
+              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="glass-input" style={{ width: '100%' }} required />
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%' }} required />
+            </div>
+            {error && <div style={{ color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
+            <button type="submit" className="action-btn" style={{ width: '100%' }}>Register</button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
@@ -533,8 +741,6 @@ function SimulatorView({ API_URL }) {
   );
 }
 
-
-
 function UploadView({ API_URL }) {
   const [file, setFile] = useState(null);
   const [prediction, setPrediction] = useState(null);
@@ -551,27 +757,59 @@ function UploadView({ API_URL }) {
 
   return (
     <div className="glass-card">
-      <div className="upload-area" style={{ textAlign: 'center', padding: '2rem', border: '2px dashed #94a3b8', borderRadius: '1rem', marginBottom: '2rem' }}>
-        <UploadCloud size={48} color="#3b82f6" />
-        <p>Drag and drop CSV here or click to browse</p>
-        <input type="file" onChange={e => setFile(e.target.files[0])} style={{ display: 'none' }} id="file-upload" />
-        <label htmlFor="file-upload" className="action-btn" style={{ width: '200px', margin: '1rem auto' }}>Browse Files</label>
-        {file && <p style={{ color: '#10b981' }}>Selected: {file.name}</p>}
+      <div className="upload-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
 
-        <div style={{ margin: '1rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-          <input
-            type="checkbox"
-            checked={learn}
-            onChange={e => setLearn(e.target.checked)}
-            id="learn-toggle"
-            style={{ width: 'auto' }}
-          />
-          <label htmlFor="learn-toggle" style={{ margin: 0, color: '#e2e8f0', cursor: 'pointer' }}>
-            Teach model with this data (Continuous Learning)
-          </label>
+        {/* File Upload Area */}
+        <div className="upload-area" style={{ textAlign: 'center', padding: '2rem', border: '2px dashed #94a3b8', borderRadius: '1rem', gridColumn: 'span 3' }}>
+          <UploadCloud size={48} color="#3b82f6" />
+          <h3 style={{ margin: '1rem 0 0.5rem' }}>Upload Data File</h3>
+          <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>
+            Supported formats: <strong>CSV, Text (.txt), Parquet</strong>
+            <br />
+            <span style={{ fontSize: '0.9em', color: '#ef4444' }}>(XML and JSON are NOT supported)</span>
+          </p>
+
+          <input type="file" onChange={e => setFile(e.target.files[0])} style={{ display: 'none' }} id="file-upload" accept=".csv,.txt,.parquet" />
+          <label htmlFor="file-upload" className="action-btn" style={{ width: '200px', margin: '0 auto', display: 'inline-block' }}>Browse Files</label>
+
+          {file && <p style={{ color: '#10b981', marginTop: '1rem' }}>Selected: {file.name}</p>}
+
+          <div style={{ margin: '1.5rem 0 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={learn}
+              onChange={e => setLearn(e.target.checked)}
+              id="learn-toggle"
+              style={{ width: 'auto' }}
+            />
+            <label htmlFor="learn-toggle" style={{ margin: 0, color: '#e2e8f0', cursor: 'pointer' }}>
+              Teach model with this data (Continuous Learning)
+            </label>
+          </div>
+
+          {file && <button className="action-btn" onClick={handleUpload}>Process File</button>}
         </div>
 
-        {file && <button className="action-btn" onClick={handleUpload}>Process File</button>}
+        {/* Database Upload Option */}
+        <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ marginBottom: '1rem' }}><i className="fas fa-database"></i> {/* Placeholder icon if fontawesome not avail, using lucide below */}
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          </div>
+          <h4>Upload from DB Server</h4>
+          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Connect to SQL/NoSQL databases</p>
+          <button className="sm-btn" style={{ marginTop: '1rem', width: '100%' }}>Connect</button>
+        </div>
+
+        {/* API Fetch Option */}
+        <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <div style={{ marginBottom: '1rem' }}>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+          </div>
+          <h4>Fetch Data from API</h4>
+          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Import from external REST/GraphQL endpoints</p>
+          <button className="sm-btn" style={{ marginTop: '1rem', width: '100%' }}>Fetch</button>
+        </div>
+
       </div>
 
       {prediction && (
