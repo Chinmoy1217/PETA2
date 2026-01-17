@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, LineChart, Line, AreaChart, Area
+  ScatterChart, Scatter, LineChart, Line, AreaChart, Area, PieChart, Pie
 } from 'recharts';
-import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download, Menu, X } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
+import cozentusLogo from './assets/cozentus_logo.png';
 
 // Fix Leaflet Icon Issue in React
 delete L.Icon.Default.prototype._getIconUrl;
@@ -21,6 +22,7 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [metrics, setMetrics] = useState(null);
   const [plots, setPlots] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const API_URL = "http://127.0.0.1:8000";
 
   useEffect(() => {
@@ -28,48 +30,217 @@ function App() {
     fetch(`${API_URL}/plots`).then(res => res.json()).then(setPlots);
   }, []);
 
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setIsMenuOpen(false); // Close drawer on selection
+  };
+
+  // Tab Title Logic
+  const getTitle = () => {
+    switch (activeTab) {
+      case 'summary': return 'Platform Overview';
+      case 'dashboard': return 'Operations Overview';
+      case 'tracking': return 'Real-Time Tracking';
+      case 'simulator': return 'Instant ETA Calculator';
+      case 'upload': return 'Batch Processing';
+      default: return 'ETA Insight';
+    }
+  };
+
   return (
     <div className="app-container">
-      <nav className="sidebar">
+      {/* Top Menu Bar */}
+      <div className="top-bar">
+        <button className="menu-btn" onClick={() => setIsMenuOpen(true)}>
+          <Menu size={24} color="#0f172a" />
+        </button>
         <div className="brand">
-          <Truck className="brand-icon" size={32} />
+          <Truck className="brand-icon" size={24} />
           <span>ETA Insight</span>
         </div>
+        <div style={{ flex: 1 }}></div>
+        {/* Optional: Add user profile or model status here if needed */}
+        <img src={cozentusLogo} alt="Cozentus Logo" className="header-logo" />
+      </div>
+
+      {/* Slide-in Drawer */}
+      <div className={`drawer-overlay ${isMenuOpen ? 'open' : ''}`} onClick={() => setIsMenuOpen(false)}></div>
+      <nav className={`side-drawer ${isMenuOpen ? 'open' : ''}`}>
+        <div className="drawer-header">
+          <h2>ETA Insight</h2>
+          <button className="close-btn" onClick={() => setIsMenuOpen(false)}>
+            <X size={24} />
+          </button>
+        </div>
         <ul className="nav-links">
-          <li className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+          <li className={`nav-item ${activeTab === 'summary' ? 'active' : ''}`} onClick={() => handleTabChange('summary')}>
+            <Activity size={20} /> Key Figures
+          </li>
+          <li className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => handleTabChange('dashboard')}>
             <LayoutDashboard size={20} /> Dashboard
           </li>
-          <li className={`nav-item ${activeTab === 'tracking' ? 'active' : ''}`} onClick={() => setActiveTab('tracking')}>
+          <li className={`nav-item ${activeTab === 'tracking' ? 'active' : ''}`} onClick={() => handleTabChange('tracking')}>
             <CheckCircle size={20} /> Track Shipment
           </li>
-          <li className={`nav-item ${activeTab === 'simulator' ? 'active' : ''}`} onClick={() => setActiveTab('simulator')}>
+          <li className={`nav-item ${activeTab === 'simulator' ? 'active' : ''}`} onClick={() => handleTabChange('simulator')}>
             <Calculator size={20} /> Trip Simulator
           </li>
-          <li className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
+          <li className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => handleTabChange('upload')}>
             <UploadCloud size={20} /> Batch Predict
           </li>
         </ul>
       </nav>
 
-      <main className="main-content">
-        <header className="header-bar">
-          <h1 className="page-title">
-            {activeTab === 'dashboard' && 'Operations Overview'}
-            {activeTab === 'tracking' && 'Real-Time Tracking'}
-            {activeTab === 'simulator' && 'Instant ETA Calculator'}
-            {activeTab === 'upload' && 'Batch Processing'}
-          </h1>
-          <div className="model-badge">
-            <span className="status-dot"></span>
-            Model Active (XGBoost v1.0)
-          </div>
-        </header>
+      {/* Main Content Area */}
+      <main className="main-content with-top-bar">
+        {/* Fade Transition Wrapper */}
+        <div key={activeTab} className="fade-in-content">
 
-        {activeTab === 'dashboard' && <DashboardView metrics={metrics} plots={plots} />}
-        {activeTab === 'tracking' && <TrackingView API_URL={API_URL} />}
-        {activeTab === 'simulator' && <SimulatorView API_URL={API_URL} />}
-        {activeTab === 'upload' && <UploadView API_URL={API_URL} />}
+          {activeTab === 'summary' && <SummaryView metrics={metrics} />}
+          {activeTab === 'dashboard' && <DashboardView metrics={metrics} plots={plots} />}
+          {activeTab === 'tracking' && <TrackingView API_URL={API_URL} />}
+          {activeTab === 'simulator' && <SimulatorView API_URL={API_URL} />}
+          {activeTab === 'upload' && <UploadView API_URL={API_URL} />}
+        </div>
       </main>
+    </div>
+  );
+}
+
+function SummaryView({ metrics }) {
+  if (!metrics) return <div style={{ padding: '2rem' }}>Loading Data...</div>;
+
+  // Format huge numbers
+  const fmt = (n) => {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n;
+  };
+
+  return (
+    <div className="summary-container" style={{
+      background: '#ffffff',
+      borderRadius: '20px',
+      padding: '1.5rem 3rem',
+      textAlign: 'center',
+      color: '#1e293b',
+      minHeight: '600px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center'
+    }}>
+      {/* Cozentus Animation */}
+      <div style={{ marginBottom: '1rem' }}>
+        <img
+          src="https://www.cozentus.com/uploads/images/sequence-031.gif"
+          alt="Cozentus Animation"
+          style={{
+            maxWidth: '500px',
+            width: '100%',
+            height: 'auto'
+          }}
+        />
+      </div>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.25)',
+        backdropFilter: 'blur(4px)',
+        padding: '0.5rem 1.5rem',
+        borderRadius: '999px',
+        display: 'inline-block',
+        fontSize: '0.9rem',
+        fontWeight: 'bold',
+        letterSpacing: '1px',
+        marginBottom: '0.75rem',
+        color: '#475569'
+      }}>
+        KEY FIGURES
+      </div>
+
+      <h1 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '2rem', color: '#0f172a' }}>
+        Data at the core of our platform
+      </h1>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+        gap: '1.5rem',
+        width: '100%',
+        maxWidth: '1200px'
+      }}>
+        {/* Metric 1 */}
+        <div style={{ padding: '0 1rem' }}>
+          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
+            +{fmt(metrics.total_shipments || 0)}
+          </div>
+          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
+            transport data
+          </div>
+          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
+            Derived from real, anonymized, continuously updated flows for optimal representativeness
+          </p>
+        </div>
+
+        {/* Metric 2 */}
+        <div style={{ padding: '0 1rem' }}>
+          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
+            +{metrics.connected_carriers_count || 50}
+          </div>
+          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
+            connected carriers
+          </div>
+          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
+            A network of major global carriers and regional shippers ready to meet your needs
+          </p>
+        </div>
+
+        {/* Metric 3 */}
+        <div style={{ padding: '0 1rem' }}>
+          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
+            +{metrics.delayed_rate || 0}%
+          </div>
+          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
+            average deviation detected
+          </div>
+          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
+            Identify optimization opportunities and regain control over your costs and lead times
+          </p>
+        </div>
+      </div>
+
+      {/* Explanation Section */}
+      <div style={{
+        marginTop: '2rem',
+        textAlign: 'left',
+        width: '100%',
+        maxWidth: '1000px',
+        animation: 'fadeInUp 0.6s ease-out 0.3s backwards'
+      }}>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1e293b', marginBottom: '1rem', borderBottom: '2px solid rgba(0,0,0,0.1)', paddingBottom: '0.5rem' }}>
+          How Insights Are Calculated
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
+              <TrendingUp size={16} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
+              Historical Analysis
+            </h4>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6' }}>
+              We analyze over {metrics.total_shipments ? (metrics.total_shipments / 1000).toFixed(0) + 'K' : '600K'} historical shipment records to establish baseline performance patterns for every route, carrier, and mode of transport.
+            </p>
+          </div>
+          <div>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
+              <Calculator size={16} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
+              Live Deviation Tracking
+            </h4>
+            <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6' }}>
+              Our XGBoost v1.0 Model continuously compares live ETA updates against our predictive baseline. The "Average Deviation" KPIs reflect the real-time gap between carrier promises and actual performance.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -86,66 +257,70 @@ function DashboardView({ metrics, plots }) {
   return (
     <>
       {/* 1. CORE KPIs */}
-      <h3 style={{ color: '#94a3b8', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>Core Performance</h3>
-      <div className="card-grid" style={{ marginBottom: '2rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', fontSize: '0.9rem' }}>Core Performance</h3>
+      <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header">Total Shipments</div>
+          <div className="stat-header">📦 Total Shipments</div>
           <div className="stat-value">{metrics.total_shipments?.toLocaleString()}</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">On-Time Delivery %</div>
+          <div className="stat-header">✅ On-Time Delivery %</div>
           <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_rate}%</div>
           <div className="sub-text">ETA Accuracy</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Late Shipments</div>
+          <div className="stat-header">🕒 Late Shipments</div>
           <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.late_shipments_count?.toLocaleString()}</div>
           <div className="sub-text">{metrics.delayed_rate}% of Total</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Avg Delay</div>
+          <div className="stat-header">⏳ Avg Delay</div>
           <div className="stat-value" style={{ color: '#f59e0b' }}>{metrics.avg_delay_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Max Delay</div>
+          <div className="stat-header">🚨 Max Delay</div>
           <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.max_delay_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Critical Delays</div>
+          <div className="stat-header">⚠️ Critical Delays</div>
           <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics.critical_delays_count}</div>
           <div className="sub-text">&gt; 3 Days</div>
         </div>
       </div>
 
       {/* 2. VARIANCE KPIs */}
-      <h3 style={{ color: '#94a3b8', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>ETA Variance</h3>
-      <div className="card-grid" style={{ marginBottom: '2rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+      <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', marginTop: '0.8rem', fontSize: '0.9rem' }}>ETA Variance</h3>
+      <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header">Avg Variance</div>
+          <div className="stat-header">🔄 Avg Variance</div>
           <div className="stat-value">{metrics.avg_eta_variance_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Early Arrivals</div>
+          <div className="stat-header">🚀 Early Arrivals</div>
           <div className="stat-value" style={{ color: '#3b82f6' }}>{metrics.early_arrival_rate}%</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">On-Time Arrivals</div>
+          <div className="stat-header">🎯 On-Time Arrivals</div>
           <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_arrival_rate}%</div>
         </div>
       </div>
 
       {/* 3. OPERATIONAL KPIs (Charts) */}
-      <h3 style={{ color: '#94a3b8', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>Operational Accuracy</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+      <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginTop: '0.8rem', marginBottom: '0.8rem', fontSize: '0.9rem' }}>Operational Accuracy</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '1rem' }}>
 
         {/* Mode Accuracy */}
         <div className="glass-card chart-container">
           <div className="stat-header">By Transport Mode</div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={150}>
             <BarChart data={metrics.mode_accuracy || []} layout="vertical">
               <XAxis type="number" domain={[80, 100]} hide />
               <YAxis dataKey="name" type="category" stroke="#94a3b8" width={60} style={{ fontSize: '0.8rem' }} />
-              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1e293b' }} />
+              <Tooltip
+                cursor={{ fill: 'transparent' }}
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
               <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>
@@ -154,24 +329,41 @@ function DashboardView({ metrics, plots }) {
         {/* Carrier Accuracy */}
         <div className="glass-card chart-container">
           <div className="stat-header">By Carrier</div>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={metrics.carrier_accuracy || []} layout="vertical">
-              <XAxis type="number" domain={[80, 100]} hide />
-              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} style={{ fontSize: '0.8rem' }} />
-              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1e293b' }} />
-              <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
-            </BarChart>
+          <ResponsiveContainer width="100%" height={150}>
+            <PieChart>
+              <Pie
+                data={metrics.carrier_accuracy || []}
+                cx="50%"
+                cy="50%"
+                innerRadius={30}
+                outerRadius={50}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {(metrics.carrier_accuracy || []).map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
         {/* Route Accuracy */}
         <div className="glass-card chart-container">
           <div className="stat-header">By Route</div>
-          <ResponsiveContainer width="100%" height={200}>
+          <ResponsiveContainer width="100%" height={150}>
             <BarChart data={metrics.route_accuracy || []} layout="vertical">
               <XAxis type="number" domain={[80, 100]} hide />
               <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} style={{ fontSize: '0.8rem' }} />
-              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1e293b' }} />
+              <Tooltip
+                cursor={{ fill: 'transparent' }}
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
               <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={20} />
             </BarChart>
           </ResponsiveContainer>
@@ -179,15 +371,19 @@ function DashboardView({ metrics, plots }) {
       </div>
 
       {/* Legacy Charts & Scatter */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="glass-card chart-container">
           <div className="stat-header">Model Battle (Accuracy %)</div>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={180}>
             <BarChart data={comparison} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
               <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" />
               <YAxis dataKey="name" type="category" stroke="#94a3b8" width={100} />
-              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6' }} />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
               <Bar dataKey="accuracy" radius={[0, 4, 4, 0]}>
                 {comparison.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={
@@ -203,12 +399,15 @@ function DashboardView({ metrics, plots }) {
 
         <div className="glass-card chart-container">
           <div className="stat-header">Mode-Specific Performance</div>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={180}>
             <BarChart data={plots?.mode_performance || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
               <XAxis dataKey="mode" stroke="#94a3b8" />
               <YAxis stroke="#94a3b8" domain={[60, 100]} />
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6' }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
               <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
                 {plots?.mode_performance?.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={
@@ -223,18 +422,22 @@ function DashboardView({ metrics, plots }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
         <div className="glass-card chart-container">
           <div className="stat-header">Variance Map (Predicted vs Actual)</div>
           {!plots?.scatter_data ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Loading Data...</div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={180}>
               <ScatterChart key={plots.scatter_data.length}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis type="number" dataKey="Actual" name="Actual" stroke="#94a3b8" unit="h" />
                 <YAxis type="number" dataKey="Pred" name="Predicted" stroke="#94a3b8" unit="h" />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6' }} />
+                <Tooltip
+                  cursor={{ strokeDasharray: '3 3' }}
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                  itemStyle={{ color: '#fff' }}
+                />
                 <Scatter name="Shipments" data={plots.scatter_data} fill="#3b82f6" />
               </ScatterChart>
             </ResponsiveContainer>
@@ -246,7 +449,7 @@ function DashboardView({ metrics, plots }) {
           {!plots?.timeline_data ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Loading Data...</div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={180}>
               <AreaChart key={plots.timeline_data.length} data={plots.timeline_data}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
@@ -257,7 +460,10 @@ function DashboardView({ metrics, plots }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis dataKey="date" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#10b981' }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#10b981', borderRadius: '8px' }}
+                  itemStyle={{ color: '#fff' }}
+                />
                 <Area type="monotone" dataKey="count" stroke="#10b981" fillOpacity={1} fill="url(#colorCount)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -385,7 +591,7 @@ function MapEffects({ src, dest, mode, waypoints }) {
 // Main shell component
 function RealWorldMap({ src, dest, mode, waypoints }) {
   return (
-    <div style={{ height: '300px', width: '100%', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid #334155' }}>
+    <div style={{ height: '100%', width: '100%', borderRadius: '0.5rem', overflow: 'hidden' }}>
       <MapContainer center={[20, 0]} zoom={2} style={{ height: '100%', width: '100%' }}>
         <MapEffects src={src} dest={dest} mode={mode} waypoints={waypoints} />
       </MapContainer>
@@ -698,12 +904,28 @@ function UploadView({ API_URL }) {
 }
 
 function TrackingView({ API_URL }) {
-  const [tid, setTid] = useState('');
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [selectedPol, setSelectedPol] = useState('USLAX');
+  const [selectedPod, setSelectedPod] = useState('CNSHA');
+  const [locations, setLocations] = useState([]);
   const [activeList, setActiveList] = useState([]);
+  const [polCoords, setPolCoords] = useState(null);
+  const [podCoords, setPodCoords] = useState(null);
 
+  // Load locations
+  useEffect(() => {
+    fetch(`${API_URL}/locations`)
+      .then(res => res.json())
+      .then(data => {
+        setLocations(data);
+        if (data.length > 0) {
+          setSelectedPol(data.includes('USLAX') ? 'USLAX' : data[0]);
+          setSelectedPod(data.includes('CNSHA') ? 'CNSHA' : (data[1] || data[0]));
+        }
+      })
+      .catch(err => console.error("Failed to load locations", err));
+  }, [API_URL]);
+
+  // Load active shipments
   useEffect(() => {
     fetch(`${API_URL}/active`)
       .then(res => res.json())
@@ -711,142 +933,100 @@ function TrackingView({ API_URL }) {
       .catch(err => console.error("Failed to load active shipments", err));
   }, [API_URL]);
 
-  const handleTrack = async (idOverride) => {
-    const targetId = idOverride || tid;
-    if (!targetId) return;
-    setTid(targetId); // Update input if called via click
+  // Fetch coordinates when POL/POD changes
+  useEffect(() => {
+    if (!selectedPol || !selectedPod) return;
 
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    // Make a prediction call to get coordinates
+    fetch(`${API_URL}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        pol: selectedPol,
+        pod: selectedPod,
+        mode: 'Ocean',
+        train: 'false'
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.predictions?.[0]?.coordinates) {
+          setPolCoords(data.predictions[0].coordinates.source);
+          setPodCoords(data.predictions[0].coordinates.destination);
+        }
+      })
+      .catch(err => console.error("Failed to fetch coordinates", err));
+  }, [selectedPol, selectedPod, API_URL]);
 
-    try {
-      const res = await fetch(`${API_URL}/track/${targetId}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Tracking Failed");
-      setResult(data);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Filter active shipments by POL/POD
+  const filteredShipments = activeList.filter(shipment => {
+    if (!selectedPol && !selectedPod) return true;
+    const matchesPol = !selectedPol || shipment.origin === selectedPol;
+    const matchesPod = !selectedPod || shipment.destination === selectedPod;
+    return matchesPol && matchesPod;
+  });
 
   return (
     <div className="view-container">
-      <div className="card-grid" style={{ gridTemplateColumns: '1fr' }}>
-        <div className="glass-card">
-          <div className="stat-header">Global Shipment Tracking</div>
-          <div className="input-group" style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-            <input
-              type="text"
-              placeholder="Enter PNR, Container ID, IMO, or Flight No (e.g. EK 581, TRK-99-AB)"
-              value={tid}
-              onChange={e => setTid(e.target.value)}
-              className="glass-input"
-              style={{ flex: 1 }}
-            />
-            <button className="accent-btn" onClick={() => handleTrack()} disabled={loading}>
-              {loading ? "Locating..." : "Track Now"}
-            </button>
+      {/* Filter Controls */}
+      <div className="glass-card" style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ color: '#1e293b', fontWeight: '600' }}>Origin Port (POL)</label>
+            <select
+              value={selectedPol}
+              onChange={e => setSelectedPol(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.8rem',
+                background: '#fff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                color: '#0f172a',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="">All Origins</option>
+              {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+            </select>
           </div>
-          {error && <div className="error-banner" style={{ marginTop: '1rem' }}>{error}</div>}
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ color: '#1e293b', fontWeight: '600' }}>Destination Port (POD)</label>
+            <select
+              value={selectedPod}
+              onChange={e => setSelectedPod(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '0.8rem',
+                background: '#fff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                color: '#0f172a',
+                fontSize: '1rem'
+              }}
+            >
+              <option value="">All Destinations</option>
+              {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
-      {result && (
-        <div className="glass-card fade-in" style={{ marginTop: '2rem' }}>
-          <div className="result-header">
-            <CheckCircle color="#10b981" size={24} />
-            <h2>Shipment Found: {result.tracking_id}</h2>
-          </div>
-
-          <div className="route-visual" style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '2rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', margin: '1rem 0'
-          }}>
-            <div className="node">
-              <div className="node-code">{result.origin.code}</div>
-              <div className="node-label">Origin</div>
-            </div>
-            <div className="connection-line">
-              <div className="mode-icon"><Truck size={16} /> {result.mode}</div>
-              <div className="line-graphic"></div>
-              <div className="metrics-pill">{result.metrics.distance}</div>
-            </div>
-            <div className="node">
-              <div className="node-code">{result.destination.code}</div>
-              <div className="node-label">Destination</div>
-            </div>
-          </div>
-
-          <div className="metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
-            <div className="metric-box">
-              <div className="label">Status</div>
-              <div className="value">{result.status}</div>
-            </div>
-            <div className="metric-box">
-              <div className="label">ETA</div>
-              <div className="value">{result.eta}</div>
-            </div>
-            <div className="metric-box">
-              <div className="label">Avg Speed</div>
-              <div className="value">{result.metrics.avg_speed}</div>
-            </div>
-            <div className="metric-box">
-              <div className="label">Carbon Footprint</div>
-              <div className="value" style={{ color: '#f59e0b' }}>{result.metrics.carbon_footprint}</div>
-            </div>
-          </div>
-
-          {/* Map Integration for Tracking */}
-          <div style={{ marginTop: '1.5rem', background: '#0f172a', borderRadius: '0.5rem', padding: '0.5rem', position: 'relative', overflow: 'hidden' }}>
-            <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000, background: 'rgba(0,0,0,0.5)', padding: '0.3rem 0.6rem', borderRadius: '0.3rem', fontSize: '0.7rem', color: '#fff' }}>LIVE TRACKING</div>
-            {result.coordinates ? (
-              <RealWorldMap src={result.coordinates.source} dest={result.coordinates.destination} mode={result.mode} />
-            ) : (
-              <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Map Data Unavailable</div>
-            )}
-          </div>
+      {/* Map Display */}
+      <div className="glass-card" style={{ marginBottom: '2rem' }}>
+        <div className="stat-header" style={{ marginBottom: '1rem', color: '#1e293b', fontWeight: 'bold' }}>
+          Route Visualization
         </div>
-      )}
-
-      {/* Active Shipments Table */}
-      {!result && activeList.length > 0 && (
-        <div className="glass-card" style={{ marginTop: '2rem' }}>
-          <div className="stat-header" style={{ marginBottom: '1rem' }}>Live Operations - Top 100 Active</div>
-          <div className="table-wrapper" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Origin</th>
-                  <th>Target</th>
-                  <th>Mode</th>
-                  <th>Status (Live)</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {activeList.map((row, idx) => (
-                  <tr key={idx} className="hover-row">
-                    <td style={{ fontFamily: 'monospace', color: '#3b82f6' }}>{row.id}</td>
-                    <td>{row.origin}</td>
-                    <td>{row.destination}</td>
-                    <td>
-                      <span className={`badge ${row.mode.toLowerCase()}`}>{row.mode}</span>
-                    </td>
-                    <td>{row.status}</td>
-                    <td>
-                      <button className="sm-btn" onClick={() => handleTrack(row.id)}>Track</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div style={{ background: '#f8fafc', borderRadius: '0.5rem', padding: '0.5rem', position: 'relative', overflow: 'hidden', border: '1px solid #cbd5e1', height: 'calc(100vh - 280px)' }}>
+          {polCoords && podCoords ? (
+            <RealWorldMap src={polCoords} dest={podCoords} mode="Ocean" />
+          ) : (
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+              Select POL and POD to view route
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
