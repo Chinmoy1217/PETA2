@@ -32,15 +32,15 @@ from backend.data_loader import DataLoader
 # Snowflake Connection Helper
 def get_snowflake_connection():
     try:
-        ctx = snowflake.connector.connect(
+        conn = snowflake.connector.connect(
             user=os.getenv("SNOWFLAKE_USER", "HACKATHON_DT"),
-            password=os.getenv("SNOWFLAKE_PASSWORD", "Welcome@Start123"),
+            password=os.getenv("SNOWFLAKE_PASSWORD"),
             account=os.getenv("SNOWFLAKE_ACCOUNT", "COZENTUS-DATAPRACTICE"),
             warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COZENTUS_WH"),
             database=os.getenv("SNOWFLAKE_DATABASE", "HACAKATHON"),
             schema=os.getenv("SNOWFLAKE_SCHEMA", "DT_INGESTION")
         )
-        return ctx
+        return conn
     except Exception as e:
         print(f"Snowflake Connection Failed: {e}")
         return None
