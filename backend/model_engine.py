@@ -10,8 +10,9 @@ import joblib
 
 # Paths
 stats_file = "route_stats.json"
-model_file = "eta_xgboost.model"
+model_file = "eta_xgboost.json" # Synced with main.py
 encoder_file = "label_encoders.joblib"
+feature_store_file = "../feature_store.pkl" # Root level for main.py access
 
 from backend.data_loader import DataLoader
 from backend.quality_check import QualityCheck
@@ -151,6 +152,16 @@ class ETAModel:
         # 4. Save
         self.model.save_model(model_file)
         joblib.dump(self.encoders, encoder_file)
+        
+        # Save Feature Store (Pickle)
+        # We put stats and risk cache into a feature store object
+        feature_store = {
+            "lane_stats": {}, # Populated if we had logic
+            "risk_cache": self.risk_cache
+        }
+        with open(feature_store_file, "wb") as f:
+             import pickle
+             pickle.dump(feature_store, f)
         
         return {"status": "success", "metrics": {"rmse": 0.52, "accuracy": "95% (Real Data)"}}
 
