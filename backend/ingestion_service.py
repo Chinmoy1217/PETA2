@@ -3,29 +3,34 @@ import requests
 import snowflake.connector
 import xml.etree.ElementTree as ET
 import time
+from dotenv import load_dotenv
+
+# Load env vars
+load_dotenv()
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
 # ---------- AZURE ----------
-AZURE_ACCOUNT_NAME = "stcozforge2k26inprojects"
-AZURE_CONTAINER = "datatalker"
-AZURE_INPUT_FOLDER = "input"
-AZURE_ARCHIVE_FOLDER = "Archieve"
-AZURE_SAS_TOKEN = "sp=racwdli&st=2026-01-17T18:10:54Z&se=2026-01-22T02:25:54Z&sv=2024-11-04&sr=c&sig=KuCUrr6EI51sQwUeSPNO97W2ETOEiteVbzGIgD0JsVk%3D"
+AZURE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+AZURE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER")
+AZURE_INPUT_FOLDER = os.getenv("AZURE_STORAGE_INPUT_FOLDER", "input")
+AZURE_ARCHIVE_FOLDER = os.getenv("AZURE_STORAGE_ARCHIVE_FOLDER", "Archieve")
+AZURE_SAS_TOKEN = os.getenv("AZURE_STORAGE_SAS_TOKEN")
 
 AZURE_ENDPOINT = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net"
-AZURE_CONTAINER_URL = f"{AZURE_ENDPOINT}/{AZURE_CONTAINER}/{AZURE_INPUT_FOLDER}/{AZURE_SAS_TOKEN}"
+# Ensure URL is constructed correctly
+AZURE_CONTAINER_URL = f"{AZURE_ENDPOINT}/{AZURE_CONTAINER}"
 
 # ---------- SNOWFLAKE ----------
-SNOWFLAKE_USER = "HACKATHON_DT"
-SNOWFLAKE_PASSWORD = "eyJraWQiOiIxOTMxNTY4MzQxMDAzOTM3OCIsImFsZyI6IkVTMjU2In0.eyJwIjoiMjk0NzMzOTQwNDEzOjI5NDczMzk0MjUzMyIsImlzcyI6IlNGOjIwMTciLCJleHAiOjE3NzEyMjY3MTF9.O0OTFEyQPIqpdCsNuV881UG1RtQQLBMIyUt-0kfESVYaI0J_u3S4fysE7lee7lWMIMoezOhd2t7gUItdoHC0UA"
-SNOWFLAKE_ACCOUNT = "COZENTUS-DATAPRACTICE"
-SNOWFLAKE_WAREHOUSE = "COZENTUS_WH"
-SNOWFLAKE_ROLE = "SYSADMIN"
-SNOWFLAKE_DATABASE = "HACAKATHON"
-SNOWFLAKE_SCHEMA = "DT_INGESTION"
+SNOWFLAKE_USER = os.getenv("SNOWFLAKE_USER")
+SNOWFLAKE_PASSWORD = os.getenv("SNOWFLAKE_PASSWORD")
+SNOWFLAKE_ACCOUNT = os.getenv("SNOWFLAKE_ACCOUNT")
+SNOWFLAKE_WAREHOUSE = os.getenv("SNOWFLAKE_WAREHOUSE")
+SNOWFLAKE_ROLE = os.getenv("SNOWFLAKE_ROLE", "SYSADMIN")
+SNOWFLAKE_DATABASE = os.getenv("SNOWFLAKE_DATABASE")
+SNOWFLAKE_SCHEMA = os.getenv("SNOWFLAKE_SCHEMA")
 
 # ============================================================
 # STEP 1: CHECK FILES IN AZURE INPUT FOLDER (REST API)
