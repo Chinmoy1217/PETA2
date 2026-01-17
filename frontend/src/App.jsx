@@ -22,14 +22,18 @@ function App() {
   const [activeTab, setActiveTab] = useState('upload');
   const [metrics, setMetrics] = useState(null);
   const [plots, setPlots] = useState(null);
+  const [theme, setTheme] = useState('dark');
   const API_URL = "http://127.0.0.1:8000";
 
   useEffect(() => {
+    document.body.className = theme;
     if (isAuthenticated) {
       fetch(`${API_URL}/metrics`).then(res => res.json()).then(setMetrics);
       fetch(`${API_URL}/plots`).then(res => res.json()).then(setPlots);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, theme]);
+
+  const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   const handleLogin = (status) => {
     if (status) {
@@ -39,47 +43,56 @@ function App() {
   }
 
   if (!isAuthenticated) {
-    return <LoginView onLogin={handleLogin} API_URL={API_URL} />;
+    return <LoginView onLogin={handleLogin} API_URL={API_URL} theme={theme} toggleTheme={toggleTheme} />;
   }
 
   return (
-    <div className="app-container">
-      <nav className="sidebar">
-        <div className="brand">
-          <Truck className="brand-icon" size={32} />
-          <span>ETA Insight</span>
+    <div className={`app-container ${theme}`} style={{ background: theme === 'dark' ? '#0f172a' : '#f8fafc', color: theme === 'dark' ? '#fff' : '#1e293b', minHeight: '100vh', display: 'flex' }}>
+      <nav className={`sidebar ${theme}`} style={{ width: '260px', padding: '2rem', display: 'flex', flexDirection: 'column', background: theme === 'dark' ? '#1e293b' : '#fff', borderRight: theme === 'dark' ? '1px solid #334155' : '1px solid #e2e8f0' }}>
+        <div className="brand" style={{ marginBottom: '3rem', display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '1.2rem', fontWeight: 'bold' }}>
+          <Truck className="brand-icon" size={32} color={theme === 'dark' ? '#60a5fa' : '#2563eb'} />
+          <span style={{ color: theme === 'dark' ? '#fff' : '#1e293b' }}>ETA Insight</span>
         </div>
-        <ul className="nav-links">
-          <li className={`nav-item ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
-            <UploadCloud size={20} /> Data Ingestion
-          </li>
-          <li className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
-            <LayoutDashboard size={20} /> Dashboard
-          </li>
-          <li className={`nav-item ${activeTab === 'tracking' ? 'active' : ''}`} onClick={() => setActiveTab('tracking')}>
-            <CheckCircle size={20} /> Track Shipment
-          </li>
-          <li className={`nav-item ${activeTab === 'simulator' ? 'active' : ''}`} onClick={() => setActiveTab('simulator')}>
-            <Calculator size={20} /> Trip Simulator
-          </li>
+        <ul className="nav-links" style={{ listStyle: 'none', padding: 0 }}>
+          {['upload', 'dashboard', 'tracking', 'simulator'].map(tab => (
+            <li
+              key={tab}
+              className={`nav-item ${activeTab === tab ? 'active' : ''}`}
+              onClick={() => setActiveTab(tab)}
+              style={{ padding: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', color: activeTab === tab ? (theme === 'dark' ? '#fff' : '#2563eb') : (theme === 'dark' ? '#94a3b8' : '#64748b'), background: activeTab === tab ? (theme === 'dark' ? 'rgba(59, 130, 246, 0.2)' : '#e0e7ff') : 'transparent', borderRadius: '0.5rem', marginBottom: '0.5rem' }}
+            >
+              {tab === 'upload' && <UploadCloud size={20} />}
+              {tab === 'dashboard' && <LayoutDashboard size={20} />}
+              {tab === 'tracking' && <CheckCircle size={20} />}
+              {tab === 'simulator' && <Calculator size={20} />}
+              {tab.charAt(0).toUpperCase() + tab.slice(1).replace('upload', 'Data Ingestion')}
+            </li>
+          ))}
         </ul>
 
-        <div style={{ marginTop: 'auto', padding: '1rem' }}>
-          <button className="nav-item" onClick={() => setIsAuthenticated(false)} style={{ width: '100%', border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', padding: '10px' }}>
+        <div style={{ marginTop: 'auto' }}>
+          <button
+            className="nav-item"
+            onClick={toggleTheme}
+            style={{ width: '100%', border: 'none', background: 'none', color: theme === 'dark' ? '#94a3b8' : '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', padding: '10px', marginBottom: '0.5rem' }}
+          >
+            {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
+          </button>
+          <button className="nav-item" onClick={() => setIsAuthenticated(false)} style={{ width: '100%', border: 'none', background: 'none', color: theme === 'dark' ? '#94a3b8' : '#64748b', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', padding: '10px' }}>
             <LogOut size={20} /> Logout
           </button>
         </div>
       </nav>
 
-      <main className="main-content">
+      <main className="main-content" style={{ flex: 1, padding: '2rem', overflowY: 'auto', background: theme === 'dark' ? 'transparent' : '#f1f5f9' }}>
         <header className="header-bar">
-          <h1 className="page-title">
+          <h1 className="page-title" style={{ color: theme === 'dark' ? '#fff' : '#1e293b' }}>
             {activeTab === 'dashboard' && 'Operations Overview'}
             {activeTab === 'tracking' && 'Real-Time Tracking'}
             {activeTab === 'simulator' && 'Instant ETA Calculator'}
-            {activeTab === 'upload' && 'Data Ingestion & Processing'}
+            {activeTab === 'upload' && 'Data Ingestion Hub'}
           </h1>
-          <div className="model-badge">
+          <div className="model-badge" style={{ background: theme === 'dark' ? 'rgba(16, 185, 129, 0.2)' : '#dcfce7', color: '#10b981' }}>
             <span className="status-dot"></span>
             Model Active (XGBoost v1.0)
           </div>
@@ -88,13 +101,13 @@ function App() {
         {activeTab === 'dashboard' && <DashboardView metrics={metrics} plots={plots} />}
         {activeTab === 'tracking' && <TrackingView API_URL={API_URL} />}
         {activeTab === 'simulator' && <SimulatorView API_URL={API_URL} />}
-        {activeTab === 'upload' && <UploadView API_URL={API_URL} />}
+        {activeTab === 'upload' && <UploadView API_URL={API_URL} theme={theme} />}
       </main>
     </div>
   );
 }
 
-function LoginView({ onLogin, API_URL }) {
+function LoginView({ onLogin, API_URL, theme, toggleTheme }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -126,30 +139,38 @@ function LoginView({ onLogin, API_URL }) {
 
   return (
     <div style={{ position: 'relative', height: '100vh', width: '100vw', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {/* Background Video */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        style={{
-          position: 'absolute',
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          zIndex: -1,
-          filter: 'brightness(0.4)'
-        }}
-      >
-        <source src="https://assets.mixkit.co/videos/preview/mixkit-aerial-view-of-container-ship-at-sea-4197-large.mp4" type="video/mp4" />
-      </video>
+      {/* Background Video - YouTube Embed */}
+      <div style={{
+        position: 'absolute',
+        top: '-10%', left: '-10%',
+        width: '120%', height: '120%',
+        zIndex: -1,
+        filter: theme === 'dark' ? 'brightness(0.7)' : 'brightness(0.8) contrast(1.1)'
+      }}>
+        <iframe
+          width="100%"
+          height="100%"
+          src="https://www.youtube.com/embed/5ye6OEhLFZc?autoplay=1&mute=1&controls=0&loop=1&playlist=5ye6OEhLFZc&showinfo=0&rel=0&iv_load_policy=3&fs=0&disablekb=1&start=2&end=25"
+          frameBorder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          style={{ pointerEvents: 'none', objectFit: 'cover' }}
+        />
+      </div>
 
-      <div className="glass-card" style={{ width: '420px', padding: '3rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.1)' }}>
+      <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 10 }}>
+        <button onClick={toggleTheme} style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(5px)', border: 'none', padding: '0.5rem 1rem', borderRadius: '20px', color: '#fff', cursor: 'pointer' }}>
+          {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+        </button>
+      </div>
+
+      <div className="glass-card" style={{ width: '450px', padding: '3rem', textAlign: 'center', background: theme === 'dark' ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
         <div style={{ marginBottom: '2.5rem' }}>
           <div style={{ background: 'rgba(59, 130, 246, 0.2)', padding: '1.2rem', borderRadius: '50%', display: 'inline-flex', marginBottom: '1.5rem', boxShadow: '0 0 20px rgba(59, 130, 246, 0.3)' }}>
             <Truck size={40} color="#60a5fa" />
           </div>
-          <h1 style={{ color: '#fff', margin: '0 0 0.5rem', fontSize: '2rem', fontWeight: '300', letterSpacing: '1px' }}>Welcome to DataTalks ETA Insights</h1>
+          <h1 style={{ color: theme === 'dark' ? '#fff' : '#1e293b', margin: '0 0 0.5rem', fontSize: '2rem', fontWeight: '300', letterSpacing: '1px', lineHeight: '1.3' }}>
+            Welcome to DataTalks<br />ETA Insights
+          </h1>
         </div>
 
         <form onSubmit={handleSubmit}>
@@ -157,40 +178,40 @@ function LoginView({ onLogin, API_URL }) {
             <input
               type="text"
               className="glass-input"
-              style={{ width: '100%', padding: '1rem', fontSize: '1rem', background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem', background: theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#cbd5e1', color: theme === 'dark' ? '#fff' : '#334155', boxSizing: 'border-box' }}
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="Username / ID"
+              placeholder="Username"
             />
           </div>
           <div style={{ marginBottom: '2rem' }}>
             <input
               type="password"
               className="glass-input"
-              style={{ width: '100%', padding: '1rem', fontSize: '1rem', background: 'rgba(0,0,0,0.3)', borderColor: 'rgba(255,255,255,0.1)' }}
+              style={{ width: '100%', padding: '1rem', fontSize: '1rem', background: theme === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)', borderColor: theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#cbd5e1', color: theme === 'dark' ? '#fff' : '#334155', boxSizing: 'border-box' }}
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Password"
             />
           </div>
 
-          {error && <div className="error-banner" style={{ marginBottom: '1.5rem', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444' }}>{error}</div>}
+          {error && <div className="error-banner" style={{ marginBottom: '1.5rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', color: '#ef4444' }}>{error}</div>}
 
           <button type="submit" className="action-btn" style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', letterSpacing: '0.5px' }} disabled={loading}>
             {loading ? 'Authenticating...' : 'Access Portal'}
           </button>
         </form>
 
-        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginBottom: '1rem' }}>New to the platform?</p>
+        <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.1)' : '#cbd5e1'}` }}>
+          <p style={{ color: theme === 'dark' ? '#94a3b8' : '#64748b', fontSize: '0.9rem', marginBottom: '1rem' }}>New to the platform?</p>
           <style>
             {`
               .create-acc-btn {
                 width: 100%;
                 padding: 0.8rem;
                 background: transparent;
-                border: 1px solid #475569;
-                color: #94a3b8;
+                border: 1px solid ${theme === 'dark' ? '#475569' : '#94a3b8'};
+                color: ${theme === 'dark' ? '#94a3b8' : '#64748b'};
                 cursor: pointer;
                 transition: all 0.3s ease;
                 border-radius: 0.5rem;
@@ -199,12 +220,6 @@ function LoginView({ onLogin, API_URL }) {
                 border-color: #3b82f6;
                 color: #60a5fa;
                 background: rgba(59, 130, 246, 0.1);
-              }
-              .create-acc-btn:active {
-                border-color: #475569;
-                color: #94a3b8;
-                background: transparent;
-                transform: scale(0.98);
               }
             `}
           </style>
@@ -216,9 +231,7 @@ function LoginView({ onLogin, API_URL }) {
           </button>
         </div>
       </div>
-
-      {/* Signup Modal Popup */}
-      {showSignup && <SignupModal onClose={() => setShowSignup(false)} API_URL={API_URL} />}
+      {showSignup && <SignupModal onClose={() => setShowSignup(false)} API_URL={API_URL} theme={theme} />}
     </div>
   );
 }
@@ -265,13 +278,13 @@ function SignupModal({ onClose, API_URL }) {
         {msg ? <div style={{ color: '#10b981', textAlign: 'center', padding: '2rem 0' }}>{msg}</div> : (
           <form onSubmit={handleSignup}>
             <div style={{ marginBottom: '1rem' }}>
-              <input type="text" placeholder="Choose Username" value={username} onChange={e => setUsername(e.target.value)} className="glass-input" style={{ width: '100%' }} required />
+              <input type="text" placeholder="Choose Username" value={username} onChange={e => setUsername(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
             </div>
             <div style={{ marginBottom: '1rem' }}>
-              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="glass-input" style={{ width: '100%' }} required />
+              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
             </div>
             <div style={{ marginBottom: '1.5rem' }}>
-              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%' }} required />
+              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
             </div>
             {error && <div style={{ color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
             <button type="submit" className="action-btn" style={{ width: '100%' }}>Register</button>
@@ -803,55 +816,20 @@ function UploadView({ API_URL }) {
         {/* API Fetch Option */}
         <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
           <div style={{ marginBottom: '1rem' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path></svg>
           </div>
           <h4>Fetch Data from API</h4>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Import from external REST/GraphQL endpoints</p>
-          <button className="sm-btn" style={{ marginTop: '1rem', width: '100%' }}>Fetch</button>
+          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Ingest from REST/GraphQL</p>
+          <button className="sm-btn" style={{ marginTop: '1rem', width: '100%' }}>Configure</button>
         </div>
-
       </div>
 
+      {/* Prediction Result Display */}
       {prediction && (
-        <>
-          {prediction.ai_summary && (
-            <div style={{ marginBottom: '1.5rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '0.5rem', borderLeft: '4px solid #10b981' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', fontWeight: 'bold', marginBottom: '0.3rem' }}>
-                <TrendingUp size={18} /> Process Analysis
-              </div>
-              <p style={{ margin: '0.5rem 0 0 0', color: '#e2e8f0', lineHeight: 1.5 }}>{prediction.ai_summary}</p>
-            </div>
-          )}
-          <h3>Analysis Results ({prediction.file_accuracy}% Accuracy on this file)</h3>
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Predicted (Hrs)</th>
-                  <th>Actual (Hrs)</th>
-                  <th>Diff</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {prediction.predictions.map((row) => (
-                  <tr key={row.id} className={row.error > 5 ? 'alert-row' : ''}>
-                    <td>#{row.id}</td>
-                    <td>{row.prediction}</td>
-                    <td>{row.actual || '-'}</td>
-                    <td>{row.error || '-'}</td>
-                    <td>
-                      {row.error > 5 ?
-                        <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><AlertTriangle size={14} /> Deviation</span> :
-                        <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><CheckCircle size={14} /> On Track</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+        <div style={{ marginTop: '2rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '0.5rem' }}>
+          <h4 style={{ margin: '0 0 0.5rem', color: '#10b981' }}>Prediction Result</h4>
+          <pre style={{ margin: 0, color: '#e2e8f0' }}>{JSON.stringify(prediction, null, 2)}</pre>
+        </div>
       )}
     </div>
   );
