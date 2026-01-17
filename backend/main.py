@@ -34,7 +34,7 @@ def get_snowflake_connection():
     try:
         conn = snowflake.connector.connect(
             user=os.getenv("SNOWFLAKE_USER", "HACKATHON_DT"),
-            password=os.getenv("SNOWFLAKE_PASSWORD"),
+            password=os.getenv("SNOWFLAKE_PASSWORD",""),
             account=os.getenv("SNOWFLAKE_ACCOUNT", "COZENTUS-DATAPRACTICE"),
             warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COZENTUS_WH"),
             database=os.getenv("SNOWFLAKE_DATABASE", "HACAKATHON"),
@@ -544,6 +544,46 @@ def simulate_trip(req: SimulationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/upload")
+async def upload_to_cloud(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """
+    Step 1: Sync the uploaded file to Azure Blob Storage.
+    """
+    def sync_to_azure(file_obj, filename):
+        AZURE_ACCOUNT_NAME = "stcozforge2k26inprojects"
+        AZURE_CONTAINER = "datatalker"
+        AZURE_INPUT_FOLDER = "input"
+        AZURE_SAS_TOKEN = ""
+
+        AZURE_ACCOUNT_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net"
+        
+        import requests
+        token = AZURE_SAS_TOKEN if AZURE_SAS_TOKEN.startswith('?') else f"?{AZURE_SAS_TOKEN}"
+        url = f"{AZURE_ACCOUNT_URL}/{AZURE_CONTAINER}/{AZURE_INPUT_FOLDER}/{filename}{token}"
+        
+        try:
+            file_obj.seek(0)
+            blob_data = file_obj.read()
+            headers = {
+                'x-ms-blob-type': 'BlockBlob',
+                'Content-Type': 'application/octet-stream'
+            }
+            resp = requests.put(url, data=blob_data, headers=headers)
+            if resp.status_code == 201:
+                print(f"✅ Successfully synced {filename} to Azure.")
+            else:
+                print(f"❌ Azure Sync Failed: {resp.status_code}")
+        except Exception as e:
+            print(f"❌ Azure Sync Error: {e}")
+
+    # For Hackathon speed, we use a background task for the actual upload 
+    # but return immediate success to the UI to keep the flow moving.
+    background_tasks.add_task(sync_to_azure, file.file, file.filename)
+    return {"status": "success", "message": f"Syncing {file.filename} to Azure Blob Storage..."}
+
 @app.post("/predict")
 async def predict_eta(
     background_tasks: BackgroundTasks,
@@ -627,6 +667,45 @@ async def predict_eta(
         
     else:
         raise HTTPException(status_code=400, detail="Missing Input: Provide a CSV file OR pol/pod/mode fields.")
+
+    # --- 1.5 AZURE BLOB STORAGE UPLOAD (New - Backend Side to avoid CORS) ---
+    if file:
+        def upload_to_azure(file_obj, filename):
+            # USER PROVIDED CREDENTIALS
+            AZURE_ACCOUNT_NAME = "stcozforge2k26inprojects"
+            AZURE_CONTAINER = "datatalker"
+            AZURE_INPUT_FOLDER = "input"
+            AZURE_SAS_TOKEN = "sp=racwl&st=2026-01-17T07:52:34Z&se=2026-01-17T16:07:34Z&sv=2024-11-04&sr=c&sig=5BBt1iIlafvsaTw4BuG1AXnCJ1q%2FQszXNep%2FHvfaCew%3D"
+
+            AZURE_ACCOUNT_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net"
+            
+            import requests
+            # Ensure SAS token starts with ?
+            token = AZURE_SAS_TOKEN if AZURE_SAS_TOKEN.startswith('?') else f"?{AZURE_SAS_TOKEN}"
+            # Include the input folder in the blob path
+            url = f"{AZURE_ACCOUNT_URL}/{AZURE_CONTAINER}/{AZURE_INPUT_FOLDER}/{filename}{token}"
+            
+            try:
+                # Reset file pointer
+                file_obj.seek(0)
+                blob_data = file_obj.read()
+                
+                headers = {
+                    'x-ms-blob-type': 'BlockBlob',
+                    'Content-Type': 'application/octet-stream'
+                }
+                
+                resp = requests.put(url, data=blob_data, headers=headers)
+                if resp.status_code == 201:
+                    print(f"✅ Successfully uploaded {filename} to Azure Blob Storage ({AZURE_INPUT_FOLDER} folder).")
+                else:
+                    print(f"❌ Azure Upload Failed: {resp.status_code} - {resp.text}")
+            except Exception as e:
+                print(f"❌ Azure Upload Error: {e}")
+
+        # Non-blocking upload to Azure in background
+        background_tasks.add_task(upload_to_azure, file.file, file.filename)
+
 
     # --- 2. TRAINING LOGIC (Batch Only) ---
     if is_training and file and 'Actual_Duration_Hours' in df.columns:
