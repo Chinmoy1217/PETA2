@@ -1,22 +1,11 @@
-# Python
 __pycache__/
-*.py[cod]
-*.venv
+*.pyc
 .env
-
-# Large Data Files (Root)
+.DS_Store
+*.model
+*.joblib
+*.json
+*.pkl
+# Ignore all data files in case some are re-added
 *.csv
 *.xlsx
-*.model
-*.pkl
-*.joblib
-
-# Exceptions (Allow Normalized Data)
-!backend/data/*.csv
-
-# Allow Source if needed (but ignoring large ones to be safe)
-# !Master_Training_Data_Augmented.csv 
-
-# Editor
-.vscode/
-.idea/
