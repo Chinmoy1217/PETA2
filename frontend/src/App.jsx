@@ -85,22 +85,100 @@ function DashboardView({ metrics, plots }) {
 
   return (
     <>
-      <div className="card-grid">
-        <div className="glass-card">
-          <div className="stat-header">Best Accuracy</div>
-          <div className="stat-value" style={{ color: '#10b981' }}>{metrics.accuracy}%</div>
-          <div className="sub-text">{metrics.name}</div>
-        </div>
-        <div className="glass-card">
-          <div className="stat-header">Avg Error (RMSE)</div>
-          <div className="stat-value">{metrics.rmse}h</div>
-        </div>
+      {/* 1. CORE KPIs */}
+      <h3 style={{ color: '#94a3b8', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>Core Performance</h3>
+      <div className="card-grid" style={{ marginBottom: '2rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
           <div className="stat-header">Total Shipments</div>
-          <div className="stat-value">600k+</div>
+          <div className="stat-value">{metrics.total_shipments?.toLocaleString()}</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">On-Time Delivery %</div>
+          <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_rate}%</div>
+          <div className="sub-text">ETA Accuracy</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">Late Shipments</div>
+          <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.late_shipments_count?.toLocaleString()}</div>
+          <div className="sub-text">{metrics.delayed_rate}% of Total</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">Avg Delay</div>
+          <div className="stat-value" style={{ color: '#f59e0b' }}>{metrics.avg_delay_days} days</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">Max Delay</div>
+          <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.max_delay_days} days</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">Critical Delays</div>
+          <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics.critical_delays_count}</div>
+          <div className="sub-text">&gt; 3 Days</div>
         </div>
       </div>
 
+      {/* 2. VARIANCE KPIs */}
+      <h3 style={{ color: '#94a3b8', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>ETA Variance</h3>
+      <div className="card-grid" style={{ marginBottom: '2rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="glass-card">
+          <div className="stat-header">Avg Variance</div>
+          <div className="stat-value">{metrics.avg_eta_variance_days} days</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">Early Arrivals</div>
+          <div className="stat-value" style={{ color: '#3b82f6' }}>{metrics.early_arrival_rate}%</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header">On-Time Arrivals</div>
+          <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_arrival_rate}%</div>
+        </div>
+      </div>
+
+      {/* 3. OPERATIONAL KPIs (Charts) */}
+      <h3 style={{ color: '#94a3b8', borderBottom: '1px solid #334155', paddingBottom: '0.5rem' }}>Operational Accuracy</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+
+        {/* Mode Accuracy */}
+        <div className="glass-card chart-container">
+          <div className="stat-header">By Transport Mode</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={metrics.mode_accuracy || []} layout="vertical">
+              <XAxis type="number" domain={[80, 100]} hide />
+              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={60} style={{ fontSize: '0.8rem' }} />
+              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1e293b' }} />
+              <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Carrier Accuracy */}
+        <div className="glass-card chart-container">
+          <div className="stat-header">By Carrier</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={metrics.carrier_accuracy || []} layout="vertical">
+              <XAxis type="number" domain={[80, 100]} hide />
+              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} style={{ fontSize: '0.8rem' }} />
+              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1e293b' }} />
+              <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Route Accuracy */}
+        <div className="glass-card chart-container">
+          <div className="stat-header">By Route</div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={metrics.route_accuracy || []} layout="vertical">
+              <XAxis type="number" domain={[80, 100]} hide />
+              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} style={{ fontSize: '0.8rem' }} />
+              <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: '#1e293b' }} />
+              <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={20} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Legacy Charts & Scatter */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
         <div className="glass-card chart-container">
           <div className="stat-header">Model Battle (Accuracy %)</div>
