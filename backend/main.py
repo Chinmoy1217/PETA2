@@ -33,12 +33,12 @@ from backend.data_loader import DataLoader
 def get_snowflake_connection():
     try:
         ctx = snowflake.connector.connect(
-            user=os.getenv("SNOWFLAKE_USER", "admin"),
-            password=os.getenv("SNOWFLAKE_PASSWORD", "admin123"),
-            account=os.getenv("SNOWFLAKE_ACCOUNT", "xy12345.us-east-1"),
-            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COMPUTE_WH"),
-            database=os.getenv("SNOWFLAKE_DATABASE", "PETA_DB"),
-            schema=os.getenv("SNOWFLAKE_SCHEMA", "PUBLIC")
+            user=os.getenv("SNOWFLAKE_USER", "HACKATHON_DT"),
+            password=os.getenv("SNOWFLAKE_PASSWORD", "Welcome@Start123"),
+            account=os.getenv("SNOWFLAKE_ACCOUNT", "COZENTUS-DATAPRACTICE"),
+            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COZENTUS_WH"),
+            database=os.getenv("SNOWFLAKE_DATABASE", "HACAKATHON"),
+            schema=os.getenv("SNOWFLAKE_SCHEMA", "DT_INGESTION")
         )
         return ctx
     except Exception as e:
@@ -53,8 +53,8 @@ def login(req: LoginRequest):
         try:
             cs = conn.cursor()
             # Vulnerable to SQLi? For hackathon MVP, parameterize simply.
-            # Assuming table USERS has columns USERNAME, PASSWORD
-            cs.execute(f"SELECT COUNT(*) FROM USERS WHERE USERNAME='{req.username}' AND PASSWORD='{req.password}'")
+            # Assuming table ROLE_LOGIN has columns USERNAME, PASSWORD
+            cs.execute(f"SELECT COUNT(*) FROM ROLE_LOGIN WHERE USERNAME='{req.username}' AND PASSWORD='{req.password}'")
             count = cs.fetchone()[0]
             conn.close()
             if count > 0:
@@ -77,7 +77,8 @@ def signup(req: LoginRequest):
         try:
             cs = conn.cursor()
             # Simple Insert - In production, use Hashing!
-            cs.execute(f"INSERT INTO USERS (USERNAME, PASSWORD) VALUES ('{req.username}', '{req.password}')")
+            # Added ROLE_NAME to match DDL: (ROLE_NAME, USERNAME, PASSWORD, CREATED_AT)
+            cs.execute(f"INSERT INTO ROLE_LOGIN (ROLE_NAME, USERNAME, PASSWORD) VALUES ('User', '{req.username}', '{req.password}')")
             conn.close()
             success = True
         except Exception as e:
