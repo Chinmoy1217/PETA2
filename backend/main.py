@@ -11,6 +11,10 @@ import numpy as np
 import pickle
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 class LoginRequest(BaseModel):
     username: str
@@ -33,12 +37,12 @@ from backend.data_loader import DataLoader
 def get_snowflake_connection():
     try:
         conn = snowflake.connector.connect(
-            user=os.getenv("SNOWFLAKE_USER", "HACKATHON_DT"),
-            password=os.getenv("SNOWFLAKE_PASSWORD",""),
-            account=os.getenv("SNOWFLAKE_ACCOUNT", "COZENTUS-DATAPRACTICE"),
-            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COZENTUS_WH"),
-            database=os.getenv("SNOWFLAKE_DATABASE", "HACAKATHON"),
-            schema=os.getenv("SNOWFLAKE_SCHEMA", "DT_INGESTION")
+            user=os.getenv("SNOWFLAKE_USER"),
+            password=os.getenv("SNOWFLAKE_PASSWORD"),
+            account=os.getenv("SNOWFLAKE_ACCOUNT"),
+            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE"),
+            database=os.getenv("SNOWFLAKE_DATABASE"),
+            schema=os.getenv("SNOWFLAKE_SCHEMA")
         )
         return conn
     except Exception as e:
@@ -553,10 +557,14 @@ async def upload_to_cloud(
     Step 1: Sync the uploaded file to Azure Blob Storage.
     """
     def sync_to_azure(file_obj, filename):
-        AZURE_ACCOUNT_NAME = "stcozforge2k26inprojects"
-        AZURE_CONTAINER = "datatalker"
-        AZURE_INPUT_FOLDER = "input"
-        AZURE_SAS_TOKEN = ""
+        AZURE_ACCOUNT_NAME = os.getenv("AZURE_STORAGE_ACCOUNT_NAME")
+        AZURE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER")
+        AZURE_INPUT_FOLDER = os.getenv("AZURE_STORAGE_INPUT_FOLDER", "input")
+        AZURE_SAS_TOKEN = os.getenv("AZURE_STORAGE_SAS_TOKEN")
+
+        if not AZURE_SAS_TOKEN:
+            print("❌ Azure Sync Error: AZURE_STORAGE_SAS_TOKEN not found in environment.")
+            return
 
         AZURE_ACCOUNT_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net"
         
@@ -667,45 +675,6 @@ async def predict_eta(
         
     else:
         raise HTTPException(status_code=400, detail="Missing Input: Provide a CSV file OR pol/pod/mode fields.")
-
-    # --- 1.5 AZURE BLOB STORAGE UPLOAD (New - Backend Side to avoid CORS) ---
-    if file:
-        def upload_to_azure(file_obj, filename):
-            # USER PROVIDED CREDENTIALS
-            AZURE_ACCOUNT_NAME = "stcozforge2k26inprojects"
-            AZURE_CONTAINER = "datatalker"
-            AZURE_INPUT_FOLDER = "input"
-            AZURE_SAS_TOKEN = "sp=racwl&st=2026-01-17T07:52:34Z&se=2026-01-17T16:07:34Z&sv=2024-11-04&sr=c&sig=5BBt1iIlafvsaTw4BuG1AXnCJ1q%2FQszXNep%2FHvfaCew%3D"
-
-            AZURE_ACCOUNT_URL = f"https://{AZURE_ACCOUNT_NAME}.blob.core.windows.net"
-            
-            import requests
-            # Ensure SAS token starts with ?
-            token = AZURE_SAS_TOKEN if AZURE_SAS_TOKEN.startswith('?') else f"?{AZURE_SAS_TOKEN}"
-            # Include the input folder in the blob path
-            url = f"{AZURE_ACCOUNT_URL}/{AZURE_CONTAINER}/{AZURE_INPUT_FOLDER}/{filename}{token}"
-            
-            try:
-                # Reset file pointer
-                file_obj.seek(0)
-                blob_data = file_obj.read()
-                
-                headers = {
-                    'x-ms-blob-type': 'BlockBlob',
-                    'Content-Type': 'application/octet-stream'
-                }
-                
-                resp = requests.put(url, data=blob_data, headers=headers)
-                if resp.status_code == 201:
-                    print(f"✅ Successfully uploaded {filename} to Azure Blob Storage ({AZURE_INPUT_FOLDER} folder).")
-                else:
-                    print(f"❌ Azure Upload Failed: {resp.status_code} - {resp.text}")
-            except Exception as e:
-                print(f"❌ Azure Upload Error: {e}")
-
-        # Non-blocking upload to Azure in background
-        background_tasks.add_task(upload_to_azure, file.file, file.filename)
-
 
     # --- 2. TRAINING LOGIC (Batch Only) ---
     if is_training and file and 'Actual_Duration_Hours' in df.columns:
