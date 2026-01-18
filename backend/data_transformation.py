@@ -39,8 +39,7 @@ def run_transformation():
             WHERE PORT_OF_DEP IS NOT NULL 
             AND PORT_OF_ARR IS NOT NULL
         """)
-        trip_count = cs.rowcount
-        print(f"   ✅ FACT_TRIP Loaded: {trip_count} rows.")
+        print(f"   ✅ FACT_TRIP Loaded: {cs.rowcount} rows.")
 
         # =====================================================
         # DIM_CARRIER – SQL-based UPSERT (Much Faster)
@@ -59,8 +58,7 @@ def run_transformation():
                 SELECT 1 FROM HACAKATHON.DT_INGESTION.DIM_CARRIER tgt WHERE tgt.CRR_SCAC_CD = src.SCAC
             )
         """)
-        carrier_count = cs.rowcount
-        print(f"   ✅ DIM_CARRIER Loaded: {carrier_count} rows.")
+        print(f"   ✅ DIM_CARRIER Loaded: {cs.rowcount} rows.")
 
         # =====================================================
         # DIM_VEHICLE – SQL-based UPSERT (Much Faster)
@@ -84,8 +82,7 @@ def run_transformation():
                 WHERE tgt.VEHICLE_NUMBER = TRY_TO_NUMBER(HACAKATHON.DT_PREP.PETA.VESSEL_IMO)
             )
         """)
-        vehicle_count = cs.rowcount
-        print(f"   ✅ DIM_VEHICLE Loaded: {vehicle_count} rows.")
+        print(f"   ✅ DIM_VEHICLE Loaded: {cs.rowcount} rows.")
 
         # =====================================================
         # DIM_PORT – SQL-based UPSERT (Much Faster)
@@ -104,8 +101,7 @@ def run_transformation():
                 SELECT 1 FROM HACAKATHON.DT_INGESTION.DIM_PORT tgt WHERE tgt.CODE = src.CODE
             )
         """)
-        port_count = cs.rowcount
-        print(f"   ✅ DIM_PORT Loaded: {port_count} rows.")
+        print(f"   ✅ DIM_PORT Loaded: {cs.rowcount} rows.")
 
         # =====================================================
         # TRUNCATE PETA
@@ -118,11 +114,8 @@ def run_transformation():
         cs.close()
         conn.close()
 
-        msg = (f"Transformation Success! Inserted: "
-               f"Trips={trip_count}, Carriers={carrier_count}, "
-               f"Vehicles={vehicle_count}, Ports={port_count}")
-        print(f"✅ {msg}")
-        return {"status": "success", "message": msg}
+        print("✅ TRANSFORMATION COMPLETE.")
+        return {"status": "success", "message": "Transformation completed successfully"}
 
     except Exception as e:
         print(f"❌ Transformation Error: {e}")
