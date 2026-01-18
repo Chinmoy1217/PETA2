@@ -1,8 +1,11 @@
 fastapi
 uvicorn
-python-multipart
 pandas
+snowflake-connector-python
 xgboost
 scikit-learn
+python-dotenv
+requests
+python-multipart
 numpy
-snowflake-connector-python
+azure-storage-blob
