@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+python-multipart
+pandas
+xgboost
+scikit-learn
+numpy
+snowflake-connector-python
