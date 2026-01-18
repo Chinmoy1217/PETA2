@@ -1,0 +1,1 @@
+{"PolCode": {"USLAX": 0, "CNHKG": 1, "SGSIN": 2, "NLROT": 3}, "PodCode": {"CNSHA": 0, "USLAX": 1, "AEDXB": 2, "USNYC": 3}, "ModeOfTransport": {"Ocean": 0, "Air": 1}, "Route": {"USLAX_CNSHA_Ocean": 0, "CNHKG_USLAX_Ocean": 1, "SGSIN_AEDXB_Ocean": 2, "USLAX_CNSHA_Air": 3, "NLROT_USNYC_Ocean": 4, "CNHKG_USLAX_Air": 5, "SGSIN_AEDXB_Air": 6}}
