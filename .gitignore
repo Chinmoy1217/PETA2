@@ -1,11 +1,6 @@
+venv310/
 __pycache__/
-*.pyc
-.env
-.DS_Store
-*.model
-*.joblib
-*.json
 *.pkl
-# Ignore all data files in case some are re-added
-*.csv
-*.xlsx
+*.json
+.env
+debug_trace.log

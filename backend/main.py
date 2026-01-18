@@ -321,7 +321,6 @@ def retrain_model():
                         ABS(DATEDIFF('hour', POL_ATD, POD_ATD)) as ACTUAL_DURATION_HOURS
                     FROM DT_INGESTION.FACT_TRIP 
                     WHERE POD_ATD IS NOT NULL AND POL_ATD IS NOT NULL
-                    limit 5000
                 """
                 
                 # Fetching 6 NEW Features + Base Risks (Latest Snapshot Only)
@@ -395,9 +394,12 @@ def retrain_model():
 
                     df = pd.concat([df, snow_final_df], ignore_index=True)
                     print(f"Added {len(snow_final_df)} enriched rows from Snowflake.")
+                    print(f"DEBUG: Total DF Size: {len(df)}")
                 
             except Exception as se:
                 print(f"Snowflake Fetch Error: {se}")
+                import traceback
+                traceback.print_exc()
             finally:
                 conn.close()
 
