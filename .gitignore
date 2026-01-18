@@ -4,3 +4,4 @@ __pycache__/
 *.json
 .env
 debug_trace.log
+node_modules/
