@@ -1,34 +1,34 @@
 {
     "xgboost": {
-        "mae": 92.58,
-        "r2": 0.8778,
-        "accuracy_pct": 87.2,
+        "mae": 92.94,
+        "r2": 0.7847,
+        "accuracy_pct": 87.1,
         "name": "xgboost"
     },
     "random_forest": {
-        "mae": 92.4,
-        "r2": 0.8739,
-        "accuracy_pct": 87.2,
+        "mae": 92.69,
+        "r2": 0.7826,
+        "accuracy_pct": 87.1,
         "name": "random_forest"
     },
     "linear_regression": {
-        "mae": 191.04,
-        "r2": -12.9121,
-        "accuracy_pct": 73.6,
+        "mae": 194.5,
+        "r2": -14.8847,
+        "accuracy_pct": 73.0,
         "name": "linear_regression"
     },
     "ensemble": {
-        "mae": 92.34,
-        "r2": 0.8767,
+        "mae": 92.66,
+        "r2": 0.784,
         "accuracy_pct": 87.2,
         "name": "ensemble"
     },
-    "winner": "xgboost",
+    "winner": "ensemble",
     "risk_model": {
         "status": "Active"
     },
     "reliability_model": {
         "status": "Active"
     },
-    "last_updated": "2026-01-18 09:20:51"
+    "last_updated": "2026-01-18 09:31:07"
 }

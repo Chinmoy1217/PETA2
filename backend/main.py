@@ -324,6 +324,8 @@ def retrain_model(current_row_count=None):
         if conn:
             try:
                 # Independent Fetches (Simpler/Faster)
+                # CHANGED TARGET: PETA vs ETA (Using POD_ETD)
+                # We calculate duration as (POD_ETD - POL_ATD) to learn the 'Scheduled' duration
                 sql_trip = """
                     SELECT 
                         TRIP_ID, 
@@ -331,9 +333,9 @@ def retrain_model(current_row_count=None):
                         POD as POD_CODE, 
                         CARRIER_SCAC_CODE,
                         'OCEAN' as MODE_OF_TRANSPORT, 
-                        ABS(DATEDIFF('hour', POL_ATD, POD_ATD)) as ACTUAL_DURATION_HOURS
+                        ABS(DATEDIFF('hour', POL_ATD, POD_ETD)) as ACTUAL_DURATION_HOURS
                     FROM DT_INGESTION.FACT_TRIP 
-                    WHERE POD_ATD IS NOT NULL AND POL_ATD IS NOT NULL
+                    WHERE POD_ETD IS NOT NULL AND POL_ATD IS NOT NULL
                 """
                 
                 # Fetching 6 NEW Features + Base Risks (Latest Snapshot Only)
