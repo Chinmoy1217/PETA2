@@ -4,11 +4,14 @@ from pydantic import BaseModel
 import pandas as pd
 import snowflake.connector
 from snowflake.connector.errors import DatabaseError
+from backend.config import SNOWFLAKE_CONFIG # Central Config
 import xgboost as xgb
 import json
 import os
 import numpy as np
 import pickle
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 
@@ -26,12 +29,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_DIR = "../model"
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "../model")
 from backend.data_loader import DataLoader
+from backend.risk_model import RiskModel # Model 2
+from backend.reliability_model import ReliabilityModel # Model 3
 
-# Snowflake Connection Helper
+# Global Models Init
+risk_model = RiskModel(MODEL_DIR)
+reliability_model = ReliabilityModel(MODEL_DIR)
+
+# Snowflake Connection Helper (Native)
 def get_snowflake_connection():
     try:
+        ctx = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
+        return ctx
         conn = snowflake.connector.connect(
             user=os.getenv("SNOWFLAKE_USER", "HACKATHON_DT"),
             password=os.getenv("SNOWFLAKE_PASSWORD"),
@@ -89,12 +100,9 @@ def signup(req: LoginRequest):
     # Mock success (Always succeed in dev/hackathon mode to let user see flow)
     return {"status": "success", "message": "User registered successfully"}
 
-# New Global
-port_coords = {}
-feature_store = {}
-
 def load_artifacts():
     global bst, lr_model, rf_model, encoders, mode_stats, model_metrics, history_df, port_coords, feature_store
+    global risk_model, reliability_model
     try:
         print("Loading XGBoost...")
         bst = xgb.Booster()
@@ -106,15 +114,24 @@ def load_artifacts():
         with open(os.path.join(MODEL_DIR, "random_forest.pkl"), "rb") as f:
             rf_model = pickle.load(f)
         
-        with open(os.path.join(MODEL_DIR, "encoders.json"), "r") as f:
-            encoders = json.load(f)
+        with open(os.path.join(MODEL_DIR, "encoders.pkl"), "rb") as f:
+            encoders = pickle.load(f)
+            
+        # Load New Models
+        print("Loading Risk & Reliability Models...")
+        risk_model.load()
+        reliability_model.load()
             
         with open(os.path.join(MODEL_DIR, "mode_stats.json"), "r") as f:
             mode_stats = json.load(f)
             
         with open(os.path.join(MODEL_DIR, "model_comparison.json"), "r") as f:
             comps = json.load(f)
-            model_metrics = {item['name']: item['accuracy'] for item in comps}
+            # Handle new Dict format
+            if isinstance(comps, dict):
+                 model_metrics = {k: v.get('accuracy_pct', 0) for k, v in comps.items() if isinstance(v, dict)}
+            else:
+                 model_metrics = {item['name']: item['accuracy'] for item in comps}
             
         print("Loading Historical Data via DataLoader...")
         global history_df
@@ -277,66 +294,286 @@ def get_rich_features(pol, pod, mode, carrier):
         "carrier_reliability": round(carrier_score * 100, 1)
     }
 
-def retrain_model():
-    print("Starting Background Retraining...")
-    global bst, encoders, history_df
+def retrain_model(current_row_count=None):
+    global bst, encoders, rf_model, lr_model, risk_model, reliability_model
+    print("Starting Model Retraining (Native Snowflake with Advanced Features)...")
+    
+    # Load Baseline State for Self-Healing
+    baseline_acc = 0.0
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                baseline_acc = state.get('accuracy_pct', 0.0)
+                if current_row_count is None:
+                    current_row_count = state.get('row_count', 0)
+        except: pass
+    
+    print(f"🛡️ Self-Healing Guardrail Active. Baseline Accuracy: {baseline_acc}%")
+
     try:
-        # 1. Load latest data
-        if not os.path.exists(DATA_PATH):
-            print("Data file not found, skipping train.")
-            return
+        # 1. LOAD DATA (Hybrid: CSV + Snowflake)
+        # Load local CSV first
+        try:
+             df = pd.read_csv(DATA_PATH, names=['PolCode', 'PodCode', 'ModeOfTransport', 'via_port', 'Actual_Duration_Hours', 'trip_id', 'trip_ATD'])
+        except:
+             df = pd.DataFrame(columns=['PolCode', 'PodCode', 'ModeOfTransport', 'via_port', 'Actual_Duration_Hours', 'trip_id', 'trip_ATD'])
 
-        df = pd.read_csv(DATA_PATH)
-        history_df = df # Update global history dataframe
-        
-        # 2. Feature Engineering
-        df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
-        FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']
-        TARGET = 'Actual_Duration_Hours'
-        
-        # 3. Re-fit Encoders (Simple Index Mapping)
-        new_encoders = {}
-        encoded_df = df.copy()
-        for col in FEATURES:
-            unique_vals = df[col].astype(str).unique()
-            mapping = {k: i for i, k in enumerate(unique_vals)}
-            new_encoders[col] = mapping
-            encoded_df[col] = encoded_df[col].astype(str).map(mapping)
-            
-        encoders = new_encoders # Update global encoders
-        # Save encoders
-        with open(os.path.join(MODEL_DIR, "encoders.json"), "w") as f:
-            json.dump(encoders, f)
+        # 2. FETCH SNOWFLAKE DATA (FACT_TRIP + LANE FEATURES)
+        conn = get_snowflake_connection()
+        if conn:
+            try:
+                # Independent Fetches (Simpler/Faster)
+                sql_trip = """
+                    SELECT 
+                        TRIP_ID, 
+                        POL as POL_CODE, 
+                        POD as POD_CODE, 
+                        CARRIER_SCAC_CODE,
+                        'OCEAN' as MODE_OF_TRANSPORT, 
+                        ABS(DATEDIFF('hour', POL_ATD, POD_ATD)) as ACTUAL_DURATION_HOURS
+                    FROM DT_INGESTION.FACT_TRIP 
+                    WHERE POD_ATD IS NOT NULL AND POL_ATD IS NOT NULL
+                """
+                
+                # Fetching 6 NEW Features + Base Risks (Latest Snapshot Only)
+                sql_lane = """
+                    SELECT 
+                        LANE_NAME, 
+                        TOTAL_LANE_RISK_SCORE,
+                        BASE_ETA_DAYS,
+                        WEATHER_RISK_SCORE,
+                        GEOPOLITICAL_RISK_SCORE,
+                        LABOR_STRIKE_SCORE,
+                        CUSTOMS_DELAY_SCORE,
+                        PORT_CONGESTION_SCORE,
+                        CARRIER_DELAY_SCORE,
+                        PEAK_SEASON_SCORE
+                    FROM DT_INGESTION.FACT_LANE_ETA_FEATURES
+                    QUALIFY ROW_NUMBER() OVER (PARTITION BY LANE_NAME ORDER BY SNAPSHOT_DATE DESC) = 1
+                """
+                
+                print("Fetching Snowflake Data...")
+                df_trip = pd.read_sql(sql_trip, conn)
+                print(f"Fetched {len(df_trip)} trip rows.")
+                
+                df_lane = pd.read_sql(sql_lane, conn)
+                print(f"Fetched {len(df_lane)} lane rows.")
+                
+                # MERGE IN PYTHON
+                if not df_trip.empty:
+                    # Helper to map Port -> Region Name (Matching FACT_LANE_ETA_FEATURES)
+                    def get_region_name(code):
+                        if not code or len(str(code)) < 2: return 'Unknown'
+                        country = str(code)[:2].upper()
+                        
+                        if country in ['US', 'CA', 'MX']: return 'North America'
+                        if country == 'IN': return 'India'
+                        if country in ['CN', 'JP', 'KR', 'SG', 'MY', 'VN', 'TH', 'HK', 'TW']: return 'Asia'
+                        if country in ['DE', 'GB', 'NL', 'FR', 'ES', 'IT', 'BE', 'PL']: return 'Europe'
+                        if country in ['AE', 'SA', 'OM', 'QA', 'KW']: return 'Middle East'
+                        return 'Asia' # Default fallback
+                        
+                    df_trip['Origin_Region'] = df_trip['POL_CODE'].apply(get_region_name)
+                    df_trip['Dest_Region'] = df_trip['POD_CODE'].apply(get_region_name)
+                    
+                    # Construct 'Region-Region' key
+                    df_trip['LANE_NAME'] = df_trip['Origin_Region'] + '-' + df_trip['Dest_Region']
+                    
+                    df_merged = pd.merge(df_trip, df_lane, on='LANE_NAME', how='left')
+                    print(f"Merged df size: {len(df_merged)}")
+                    
+                    # Map to Training Schema
+                    snow_final_df = pd.DataFrame()
+                    snow_final_df['PolCode'] = df_merged['POL_CODE']
+                    snow_final_df['PodCode'] = df_merged['POD_CODE']
+                    snow_final_df['ModeOfTransport'] = df_merged['MODE_OF_TRANSPORT']
+                    snow_final_df['Actual_Duration_Hours'] = df_merged['ACTUAL_DURATION_HOURS']
+                    snow_final_df['trip_id'] = df_merged['TRIP_ID']
+                    snow_final_df['Carrier'] = df_merged.get('CARRIER_SCAC_CODE', 'UNKNOWN')
+                    
+                    # Risk Features (Mapping all)
+                    snow_final_df['External_Risk_Score'] = df_merged['TOTAL_LANE_RISK_SCORE']
+                    snow_final_df['BASE_ETA_DAYS'] = df_merged['BASE_ETA_DAYS']
+                    snow_final_df['WEATHER_RISK_SCORE'] = df_merged['WEATHER_RISK_SCORE']
+                    snow_final_df['GEOPOLITICAL_RISK_SCORE'] = df_merged['GEOPOLITICAL_RISK_SCORE']
+                    snow_final_df['LABOR_STRIKE_SCORE'] = df_merged['LABOR_STRIKE_SCORE']
+                    snow_final_df['CUSTOMS_DELAY_SCORE'] = df_merged['CUSTOMS_DELAY_SCORE']
+                    snow_final_df['PORT_CONGESTION_SCORE'] = df_merged['PORT_CONGESTION_SCORE']
+                    snow_final_df['CARRIER_DELAY_SCORE'] = df_merged['CARRIER_DELAY_SCORE']
+                    snow_final_df['PEAK_SEASON_SCORE'] = df_merged['PEAK_SEASON_SCORE']
+                    
+                    snow_final_df['trip_ATD'] = "2023-01-01" # Dummy
 
-        # 4. Train XGBoost
-        # Filter rows with valid targets
-        train_df = encoded_df.dropna(subset=[TARGET])
-        train_df = train_df[train_df[TARGET] > 0]
-        
-        X = train_df[FEATURES]
-        y = np.log1p(train_df[TARGET])
-        
-        dtrain = xgb.DMatrix(X, label=y)
-        
-        params = {
-            'objective': 'reg:squarederror',
-            'max_depth': 10,
-            'eta': 0.05, # Faster learning rate for quick updates
-            'subsample': 0.8,
-            'colsample_bytree': 0.8,
-            'nthread': 4
-        }
-        
-        # Train (Fewer rounds for background speed)
-        model = xgb.train(params, dtrain, num_boost_round=200) 
-        
-        # Save
-        model.save_model(os.path.join(MODEL_DIR, "eta_xgboost.json"))
-        bst = model # Update global model reference
-        
-        print(f"Retraining Complete. Trained on {len(train_df)} rows.")
-        
+                    df = pd.concat([df, snow_final_df], ignore_index=True)
+                    print(f"Added {len(snow_final_df)} enriched rows from Snowflake.")
+                    print(f"DEBUG: Total DF Size: {len(df)}")
+                
+            except Exception as se:
+                print(f"Snowflake Fetch Error: {se}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                conn.close()
+
+        # 3. TRAIN XGBOOST
+        if len(df) > 10:
+             # Clean & Coerce Numeric
+             numeric_cols = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE', 
+                             'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                             'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                             'Actual_Duration_Hours']
+                             
+             for col in numeric_cols:
+                 df[col] = pd.to_numeric(df.get(col, 0), errors='coerce').fillna(0)
+             
+             # FILTER: Remove invalid durations
+             df = df[df['Actual_Duration_Hours'] > 0].copy()
+             
+             TARGET = 'Actual_Duration_Hours'
+             
+             # Fill Missing
+             if 'Carrier' not in df.columns: df['Carrier'] = 'UNKNOWN'
+             df['Carrier'] = df['Carrier'].fillna('UNKNOWN')
+             
+             df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
+             df['Route_Carrier'] = df['Route'] + "_" + df['Carrier'].astype(str)
+             
+             # --- ULTIMATE FEATURE ENGINEERING ---
+             # 1. Route Target Encoding
+             m = 1
+             global_mean = df[TARGET].mean()
+             
+             def smooth_mean(row):
+                 n = row['count']
+                 mu = row['mean']
+                 return (n * mu + m * global_mean) / (n + m)
+                 
+             route_lookup = df.groupby('Route')[TARGET].agg(['mean', 'count']).apply(smooth_mean, axis=1).to_dict()
+             df['Route_Target_Enc'] = df['Route'].map(route_lookup).fillna(global_mean)
+             
+             # 2. Carrier-Route Encoding (Granular)
+             # This distinguishes Maersk-LAX-SHA vs MSC-LAX-SHA
+             carrier_lookup = df.groupby('Route_Carrier')[TARGET].agg(['mean', 'count']).apply(smooth_mean, axis=1).to_dict()
+             df['Carrier_Target_Enc'] = df['Route_Carrier'].map(carrier_lookup).fillna(df['Route_Target_Enc']) # Fallback to Route Mean
+             
+             # 3. Interactions
+             df['Risk_Intensity'] = df['External_Risk_Score'] * 1.5 + df['WEATHER_RISK_SCORE']
+             df['Peak_Risk_Factor'] = df['PEAK_SEASON_SCORE'] * df['External_Risk_Score']
+             
+             FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier',
+                         'External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                         'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                         'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                         'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc'] 
+             
+             CAT_FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier']
+             
+             # Encode
+             encoded_df = df.copy()
+             new_encoders = {}
+             
+             for col in CAT_FEATURES:
+                 unique_vals = df[col].astype(str).unique()
+                 mapping = {k: i for i, k in enumerate(unique_vals)}
+                 new_encoders[col] = mapping
+                 encoded_df[col] = encoded_df[col].astype(str).map(mapping)
+                 
+             encoders = new_encoders
+             with open(os.path.join(MODEL_DIR, "encoders.pkl"), "wb") as f: pickle.dump(encoders, f)
+             
+             # Training Setup
+             X = encoded_df[FEATURES]
+             # Manually copy floats that might have been lost if I created X from pure encodings? No, features list is safe.
+             # Just ensuring correct types.
+             X = X.apply(pd.to_numeric, errors='coerce').fillna(0)
+             
+             y = np.log1p(df[TARGET])
+             
+             from sklearn.model_selection import train_test_split
+             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+             
+             # 1. XGBoost
+             dtrain = xgb.DMatrix(X_train, label=y_train)
+             dtest = xgb.DMatrix(X_test, label=y_test)
+             xgb_params = {'objective': 'reg:squarederror', 'max_depth': 8, 'eta': 0.05, 'subsample': 0.8}
+             xgb_model = xgb.train(xgb_params, dtrain, num_boost_round=400)
+             preds_xgb = np.expm1(xgb_model.predict(dtest))
+             
+             # 2. Random Forest
+             rf_model = RandomForestRegressor(n_estimators=100, max_depth=14, random_state=42)
+             rf_model.fit(X_train, y_train)
+             preds_rf = np.expm1(rf_model.predict(X_test))
+             
+             # 3. Linear Regression
+             lr_model = LinearRegression()
+             lr_model.fit(X_train, y_train)
+             preds_lr = np.expm1(lr_model.predict(X_test))
+             
+             # 4. Ensemble (Average of XGB + RF)
+             preds_ensemble = (preds_xgb + preds_rf) / 2
+             
+             # Evaluation
+             actuals = np.expm1(y_test)
+             
+             def calc_metrics(preds, name):
+                 mae = mean_absolute_error(actuals, preds)
+                 r2 = r2_score(actuals, preds)
+                 wape = np.sum(np.abs(actuals - preds)) / np.sum(actuals)
+                 acc = max(0, 100 * (1 - wape))
+                 return {"mae": round(mae, 2), "r2": round(r2, 4), "accuracy_pct": round(acc, 1), "name": name}
+
+             stats_xgb = calc_metrics(preds_xgb, "xgboost")
+             stats_rf = calc_metrics(preds_rf, "random_forest")
+             stats_lr = calc_metrics(preds_lr, "linear_regression")
+             stats_ens = calc_metrics(preds_ensemble, "ensemble")
+             
+             # Select Winner (Bias towards Ensemble if close)
+             candidates = [stats_xgb, stats_rf, stats_lr, stats_ens]
+             winner = max(candidates, key=lambda x: x['accuracy_pct'])
+             
+             print(f"🏆 Winner: {winner['name']} ({winner['accuracy_pct']}%)")
+             
+             # Save Winner
+             if winner['name'] == 'xgboost':
+                 xgb_model.save_model(os.path.join(MODEL_DIR, "eta_xgboost.json"))
+                 bst = xgb_model
+             elif winner['name'] == 'random_forest':
+                 with open(os.path.join(MODEL_DIR, "eta_xgboost.json"), "w") as f: f.write("USE_RF")
+                 bst = rf_model
+             elif winner['name'] == 'ensemble':
+                 with open(os.path.join(MODEL_DIR, "eta_xgboost.json"), "w") as f: f.write("USE_ENSEMBLE")
+                 bst = "ENSEMBLE" # Flag for API to use both
+                 # Save both component models
+                 xgb_model.save_model(os.path.join(MODEL_DIR, "ensemble_xgb.json"))
+                 with open(os.path.join(MODEL_DIR, "ensemble_rf.pkl"), "wb") as f: pickle.dump(rf_model, f)
+             else:
+                 bst = lr_model 
+                 
+             # Save Standard Artifacts
+             with open(os.path.join(MODEL_DIR, "random_forest.pkl"), "wb") as f: pickle.dump(rf_model, f)
+             with open(os.path.join(MODEL_DIR, "linear_regression.pkl"), "wb") as f: pickle.dump(lr_model, f)
+             
+             # Train Aux Models
+             risk_model.train(df)
+             reliability_model.train(df)
+             
+             metrics = {
+                 "xgboost": stats_xgb, "random_forest": stats_rf, "linear_regression": stats_lr, "ensemble": stats_ens,
+                 "winner": winner['name'],
+                 "risk_model": {"status": "Active"}, 
+                 "reliability_model": {"status": "Active"},
+                 "last_updated": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+             }
+             
+             with open(os.path.join(MODEL_DIR, "model_comparison.json"), "w") as f:
+                 json.dump(metrics, f, indent=4)
+
+             print(f"Retraining Complete. Winner: {winner['name']}")
+             
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Retraining Failed: {e}")
 
 class SimulationRequest(BaseModel):
@@ -347,6 +584,13 @@ class SimulationRequest(BaseModel):
     congestion_level: int = 0  # 0-100
     weather_severity: int = 0  # 0-100
 
+class RiskRequest(BaseModel):
+    External_Risk_Score: float = 0
+    WEATHER_RISK_SCORE: float = 0
+    PEAK_SEASON_SCORE: float = 0
+    PORT_CONGESTION_SCORE: float = 0
+    LABOR_STRIKE_SCORE: float = 0
+
 @app.get("/")
 def home():
     return {"message": "ETA Insight API is Running"}
@@ -356,13 +600,85 @@ def get_locations():
     """Returns list of all available Port/City codes"""
     return sorted(list(port_coords.keys()))
 
+@app.post("/predict/risk")
+def predict_risk(req: RiskRequest):
+    """Model 2: Returns probability of delay > 3 days"""
+    try:
+        prob = risk_model.predict_risk_proba(req.dict())
+        return {
+            "delay_probability": prob,
+            "risk_level": "High" if prob > 0.7 else ("Medium" if prob > 0.4 else "Low")
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+# State File Path
+STATE_FILE = os.path.join(MODEL_DIR, "data_state.json")
+
+def check_data_freshness():
+    """Returns (has_changed, new_count, current_count)"""
+    try:
+        # 1. Get Current Count from Snowflake
+        conn = get_snowflake_connection()
+        if not conn: return (True, 0, 0) # Fallback to retrain if check fails
+        
+        cs = conn.cursor()
+        cs.execute("SELECT COUNT(*) FROM DT_INGESTION.FACT_TRIP")
+        new_count = cs.fetchone()[0]
+        conn.close()
+        
+        # 2. Get Last Known Count
+        last_count = 0
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                last_count = state.get('row_count', 0)
+        
+        has_changed = new_count > last_count
+        return (has_changed, new_count, last_count)
+        
+    except Exception as e:
+        print(f"Freshness Check Error: {e}")
+        return (True, 0, 0) # Default to retrain on error
+
+@app.post("/sync-snowflake")
+def sync_snowflake(background_tasks: BackgroundTasks, force: bool = False):
+    """Triggers model retraining if data has changed, or if forced."""
+    changed, new_cnt, old_cnt = check_data_freshness()
+    
+    if force or changed:
+        reason = "Manual Force" if force else f"Data Increased ({old_cnt} -> {new_cnt})"
+        print(f"Triggering Retrain: {reason}")
+        background_tasks.add_task(retrain_model, new_cnt)
+        return {
+            "status": "success", 
+            "message": f"Retraining Started. Reason: {reason}",
+            "data_change": {"old": old_cnt, "new": new_cnt}
+        }
+    else:
+        return {
+            "status": "skipped", 
+            "message": "No new data detected.",
+            "data_change": {"old": old_cnt, "new": new_cnt}
+        }
+
+@app.get("/carriers")
+def get_carriers():
+    """Model 3: Returns ranked carriers by reliability"""
+    try:
+        ranking = reliability_model.rank_carriers()
+        return [{"carrier": c, "score": s['score'], "tier": s['reliability_tier']} for c, s in ranking]
+    except Exception as e:
+        return {"error": str(e)}
+
 @app.get("/metrics")
 def get_metrics():
     try:
         with open(os.path.join(MODEL_DIR, "model_comparison.json"), "r") as f:
             data = json.load(f)
-            xgboost_data = next((item for item in data if item["name"] == "XGBoost"), data[0])
-            return xgboost_data
+            if isinstance(data, dict):
+                 return data.get('xgboost', {"accuracy": 0, "mae": 0})
+            return data[0] # Fallback
     except:
         return {"accuracy": 0, "rmse": 0}
 
@@ -372,7 +688,7 @@ def get_comparison():
         with open(os.path.join(MODEL_DIR, "model_comparison.json"), "r") as f:
             return json.load(f)
     except:
-        return []
+        return {}
 
 @app.get("/plots")
 def get_plots():
@@ -413,14 +729,43 @@ def get_active_shipments():
 
 def prepare_input(df):
     # For XGBoost (Native DMatrix)
-    FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']
+    # Patching prepare_input to include seasonality
     df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
     
     encoded_df = df.copy()
-    for col in FEATURES:
+    for col in ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']:
         mapping = encoders.get(col, {})
-        # Handle unknown categories by mapping to 0 (or generic unknown if we had one)
         encoded_df[col] = encoded_df[col].astype(str).map(lambda s: mapping.get(s, 0))
+    
+    # Add Seasonality (Simulate uses Now)
+    now = pd.Timestamp.now()
+    encoded_df['Departure_Month'] = int(now.month)
+    encoded_df['Departure_Week'] = int(now.isocalendar().week)
+    encoded_df['Departure_Quarter'] = int(now.quarter)
+    
+    # Add other missing numerics as 0
+    NUMERIC = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
+    for c in NUMERIC: encoded_df[c] = 0.0
+
+    # Note: Carrier is missing in SimulationRequest usually, so we skip it or mock it.
+    # SimulationRequest doesn't have carrier. The model *expects* Carrier and Carrier_Target_Enc.
+    # We must add them.
+    encoded_df['Carrier'] = 0 # Unknown
+    
+    # Note: Carrier is missing in SimulationRequest usually, so we skip it or mock it.
+    # SimulationRequest doesn't have carrier. The model *expects* Carrier and Carrier_Target_Enc.
+    # We must add them.
+    encoded_df['Carrier'] = 0 # Unknown
+    
+    # EXACT ORDER matching model (18 features)
+    FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier',
+                'External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
     
     return encoded_df[FEATURES]
 
@@ -446,9 +791,9 @@ def simulate_trip(req: SimulationRequest):
         
         # 3. Decision Logic
         candidates = [
-            {'name': 'XGBoost', 'pred': pred_xgb, 'score': model_metrics.get('XGBoost', 0)},
-            {'name': 'Random Forest', 'pred': pred_rf, 'score': model_metrics.get('Random Forest', 0)},
-            {'name': 'Linear Regression', 'pred': pred_lr, 'score': model_metrics.get('Linear Regression', 0)}
+            {'name': 'XGBoost', 'pred': pred_xgb, 'score': model_metrics.get('xgboost', 0)},
+            {'name': 'Random Forest', 'pred': pred_rf, 'score': model_metrics.get('random_forest', 0)},
+            {'name': 'Linear Regression', 'pred': pred_lr, 'score': model_metrics.get('linear_regression', 0)}
         ]
         
         # Pick winner
@@ -650,14 +995,45 @@ async def predict_eta(
 
         # Feature Engineering
         df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
-        
+        if 'Carrier' not in df.columns: df['Carrier'] = 'UNKNOWN'
+        df['Route_Carrier'] = df['Route'] + "_" + df['Carrier'].astype(str)
+
+        # Encode Categoricals
         encoded_df = df.copy()
-        for col in ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']:
+        CAT_FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier']
+        for col in CAT_FEATURES:
             mapping = encoders.get(col, {})
-            # Handle unknown keys (0)
             encoded_df[col] = encoded_df[col].astype(str).map(lambda s: mapping.get(s, 0))
+
+        # Add Missing Numeric Features (Defaults)
+        NUMERIC_FEATURES = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                            'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                            'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                            'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
+        
+        for col in NUMERIC_FEATURES:
+            if col not in encoded_df.columns:
+                encoded_df[col] = 0.0
+
+        # Add Missing Numeric Features (Defaults)
+        NUMERIC_FEATURES = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                            'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                            'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                            'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
+        
+        for col in NUMERIC_FEATURES:
+            if col not in encoded_df.columns:
+                encoded_df[col] = 0.0
+
+        # EXACT ORDER matching model (18 features)
+        # Removed Seasonality to match persistent artifact
+        FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier',
+                    'External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                    'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                    'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                    'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
             
-        dmat = xgb.DMatrix(encoded_df[['PolCode', 'PodCode', 'ModeOfTransport', 'Route']])
+        dmat = xgb.DMatrix(encoded_df[FEATURES])
         preds = np.expm1(bst.predict(dmat))
         
         # Format Results for Single Simulation vs Batch
