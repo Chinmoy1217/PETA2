@@ -2,7 +2,15 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
-# Mock Data Generator
+# Snowflake Config
+USER = "HACKATHON_DT"
+PASSWORD = "Welcome@Start123"
+ACCOUNT = "COZENTUS-DATAPRACTICE"
+DATABASE = "HACAKATHON"
+SCHEMA = "DT_PREP"
+ROLE = "SYSADMIN"
+WAREHOUSE = "COZENTUS_WH"
+
 class DataLoader:
     def __init__(self):
         self.trips = None

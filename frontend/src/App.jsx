@@ -3,7 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area
 } from 'recharts';
-import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download, LogOut, Lock } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download, LogOut, Lock, Database, Webhook } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -114,6 +114,15 @@ function LoginView({ onLogin, API_URL, theme, toggleTheme }) {
   const [loading, setLoading] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
 
+  // Video Loop workaround for precise 1.5s - 25s loop
+  const [videoKey, setVideoKey] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVideoKey(prev => prev + 1);
+    }, 23500); // 25s - 1.5s = 23.5s
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -148,9 +157,10 @@ function LoginView({ onLogin, API_URL, theme, toggleTheme }) {
         filter: theme === 'dark' ? 'brightness(0.7)' : 'brightness(0.8) contrast(1.1)'
       }}>
         <iframe
+          key={videoKey}
           width="100%"
           height="100%"
-          src="https://www.youtube.com/embed/5ye6OEhLFZc?autoplay=1&mute=1&controls=0&loop=1&playlist=5ye6OEhLFZc&showinfo=0&rel=0&iv_load_policy=3&fs=0&disablekb=1&start=2&end=25"
+          src={`https://www.youtube.com/embed/5ye6OEhLFZc?autoplay=1&mute=1&controls=0&loop=1&playlist=5ye6OEhLFZc&showinfo=0&rel=0&iv_load_policy=3&fs=0&disablekb=1&start=2&end=25`}
           frameBorder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           style={{ pointerEvents: 'none', objectFit: 'cover' }}
@@ -284,7 +294,7 @@ function SignupModal({ onClose, API_URL }) {
               <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
             </div>
             <div style={{ marginBottom: '1.5rem' }}>
-              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
+              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%', boxSsizing: 'border-box' }} required />
             </div>
             {error && <div style={{ color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
             <button type="submit" className="action-btn" style={{ width: '100%' }}>Register</button>
@@ -758,14 +768,80 @@ function UploadView({ API_URL }) {
   const [file, setFile] = useState(null);
   const [prediction, setPrediction] = useState(null);
   const [learn, setLearn] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [isSynced, setIsSynced] = useState(false);
 
-  const handleUpload = async () => {
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
+    setIsSynced(false);
+    setPrediction(null);
+    setStatus(null);
+  };
+
+  const [uploadedFilename, setUploadedFilename] = useState(null);
+
+  const handleSync = async () => {
     if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('train', learn); // Send training flag
-    const res = await fetch(`${API_URL}/predict`, { method: 'POST', body: fd });
-    setPrediction(await res.json());
+
+    try {
+      setStatus('⏳ Uploading to Azure & Checking Quality...');
+      const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        setIsSynced(true);
+        setUploadedFilename(data.filename); // Store filename for ingest
+        setStatus(`✅ CHECK PASSED (Accuracy: ${data.accuracy}%)\nCloud Upload Complete.\nProceed to Ingestion.`);
+      } else if (data.status === 'warning') {
+        setIsSynced(false);
+        setStatus(`⚠️ CHECK FAILED (Accuracy: ${data.accuracy}%)\nFile Uploaded to Archive Only.\n${data.message}`);
+      } else {
+        setStatus(`❌ Error: ${data.message}`);
+      }
+    } catch (err) {
+      console.error("Sync Error:", err);
+      setStatus(`❌ Sync error: ${err.message}`);
+    }
+  };
+
+  const handleIngest = async () => {
+    if (!uploadedFilename) return;
+    try {
+      setStatus('⏳ Triggering Ingestion & Transformation...');
+      const res = await fetch(`${API_URL}/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: uploadedFilename })
+      });
+      const data = await res.json();
+      if (data.status === 'success') {
+        setStatus(`✅ ${data.message}\nCheck logs for details.`);
+      } else {
+        setStatus(`❌ Ingestion failed: ${data.message}`);
+      }
+    } catch (err) {
+      setStatus(`❌ Ingestion error: ${err.message}`);
+    }
+  };
+
+  const handleProcess = async () => {
+    if (!file || !isSynced) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('train', learn);
+
+    try {
+      setStatus('Processing file for insights...');
+      const res = await fetch(`${API_URL}/predict`, { method: 'POST', body: fd });
+      const data = await res.json();
+      setPrediction(data);
+      setStatus('✅ Processing complete. Results displayed below.');
+    } catch (err) {
+      console.error("Processing Error:", err);
+      setStatus(`❌ Processing error: ${err.message}`);
+    }
   };
 
   return (
@@ -782,7 +858,7 @@ function UploadView({ API_URL }) {
             <span style={{ fontSize: '0.9em', color: '#ef4444' }}>(XML and JSON are NOT supported)</span>
           </p>
 
-          <input type="file" onChange={e => setFile(e.target.files[0])} style={{ display: 'none' }} id="file-upload" accept=".csv,.txt,.parquet" />
+          <input type="file" onChange={handleFileChange} style={{ display: 'none' }} id="file-upload" accept=".csv,.txt,.parquet" />
           <label htmlFor="file-upload" className="action-btn" style={{ width: '200px', margin: '0 auto', display: 'inline-block' }}>Browse Files</label>
 
           {file && <p style={{ color: '#10b981', marginTop: '1rem' }}>Selected: {file.name}</p>}
@@ -800,13 +876,50 @@ function UploadView({ API_URL }) {
             </label>
           </div>
 
-          {file && <button className="action-btn" onClick={handleUpload}>Process File</button>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
+            {/* Step 1: Upload & Check */}
+            <button
+              className="action-btn"
+              onClick={handleSync}
+              disabled={!file}
+              style={{ background: file ? '#f59e0b' : '#64748b' }}
+            >
+              1. Upload & Check Quality
+            </button>
+
+            {/* Step 2: Ingest (Only if Uploaded/Synced) */}
+            {file && isSynced && (
+              <button
+                className="action-btn"
+                onClick={handleIngest}
+                style={{ background: '#10b981' }}
+              >
+                2. Ingest & Transform
+              </button>
+            )}
+          </div>
+
+          {status && (
+            <div style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.1)', fontSize: '0.95rem', color: '#e2e8f0' }}>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{status}</pre>
+            </div>
+          )}
+
+          {/* Show Process button only if synced/ingested successfully */}
+          {file && isSynced && (
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button className="action-btn" onClick={handleProcess} style={{ background: '#10b981' }}>Proceed to Insights</button>
+            </div>
+          )}
+
+
+
         </div>
 
         {/* Database Upload Option */}
         <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ marginBottom: '1rem' }}><i className="fas fa-database"></i> {/* Placeholder icon if fontawesome not avail, using lucide below */}
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+            <Database size={32} color="#f59e0b" />
           </div>
           <h4>Upload from DB Server</h4>
           <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Connect to SQL/NoSQL databases</p>
@@ -815,8 +928,8 @@ function UploadView({ API_URL }) {
 
         {/* API Fetch Option */}
         <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ marginBottom: '1rem' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path></svg>
+          <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+            <Webhook size={32} color="#10b981" />
           </div>
           <h4>Fetch Data from API</h4>
           <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Ingest from REST/GraphQL</p>

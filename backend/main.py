@@ -15,6 +15,11 @@ from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 
+# from dotenv import load_dotenv
+
+# Load environment variables from .env file
+# load_dotenv()
+
 class LoginRequest(BaseModel):
     username: str
     password: str
@@ -44,12 +49,12 @@ def get_snowflake_connection():
         ctx = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
         return ctx
         conn = snowflake.connector.connect(
-            user=os.getenv("SNOWFLAKE_USER", "HACKATHON_DT"),
-            password=os.getenv("SNOWFLAKE_PASSWORD"),
-            account=os.getenv("SNOWFLAKE_ACCOUNT", "COZENTUS-DATAPRACTICE"),
-            warehouse=os.getenv("SNOWFLAKE_WAREHOUSE", "COZENTUS_WH"),
-            database=os.getenv("SNOWFLAKE_DATABASE", "HACAKATHON"),
-            schema=os.getenv("SNOWFLAKE_SCHEMA", "DT_INGESTION")
+            user="HACKATHON_DT",
+            password="eyJraWQiOiIxOTMxNTY4MzQxMDAzOTM3OCIsImFsZyI6IkVTMjU2In0.eyJwIjoiMjk0NzMzOTQwNDEzOjI5NDczMzk0MjUzMyIsImlzcyI6IlNGOjIwMTciLCJleHAiOjE3NzEyMjY3MTF9.O0OTFEyQPIqpdCsNuV881UG1RtQQLBMIyUt-0kfESVYaI0J_u3S4fysE7lee7lWMIMoezOhd2t7gUItdoHC0UA",
+            account="COZENTUS-DATAPRACTICE",
+            warehouse="COZENTUS_WH",
+            database="HACAKATHON",
+            schema="DT_INGESTION"
         )
         return conn
     except Exception as e:
@@ -891,6 +896,87 @@ def simulate_trip(req: SimulationRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/upload")
+async def upload_to_cloud(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """
+    Step 1: Save Locally -> Upload to Azure (Archive) -> Run Quality Check -> Return Result.
+    (Step 2: Ingestion is triggered manually via /ingest)
+    """
+    import shutil
+    import os
+    from backend.ingestion_service import upload_to_archive_rest
+    from backend.quality_check import DataQualityChecker
+
+    # Save to temp file
+    temp_dir = "temp_uploads"
+    os.makedirs(temp_dir, exist_ok=True)
+    temp_path = os.path.join(temp_dir, file.filename)
+    
+    try:
+        # 1. Save locally
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        print(f"💾 Saved local file: {temp_path}")
+
+        # 2. Upload to Azure (as requested "Uploads file into Azure")
+        # We use the archive function to push it to blob storage
+        background_tasks.add_task(upload_to_archive_rest, temp_path)
+        
+        # 3. Run Quality Check
+        checker = DataQualityChecker(temp_path)
+        is_ready, accuracy = checker.run_quality_check()
+        
+        status = "success" if is_ready else "warning"
+        msg = f"Accuracy {accuracy}%." + (" Ready to Ingest." if is_ready else " Quality Check Failed.")
+
+        return {
+            "status": status,
+            "accuracy": accuracy,
+            "filename": file.filename, # Return filename for Step 2
+            "message": msg,
+            "can_ingest": is_ready
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+class IngestRequest(BaseModel):
+    filename: str
+
+@app.post("/ingest")
+async def trigger_ingestion(req: IngestRequest, background_tasks: BackgroundTasks):
+    """
+    Step 2: Ingest (Internal Stage) -> Transform
+    """
+    import os
+    from backend.ingestion_service import ingest_direct_from_file
+    
+    file_path = os.path.join("temp_uploads", req.filename)
+    
+    if not os.path.exists(file_path):
+        return {"status": "error", "message": f"File {req.filename} not found on server. Please upload again."}
+        
+    def process_full_ingestion(path):
+        try:
+            # This function in ingestion_service.py now handles Ingest + Archive + Transform
+            # We might want to ensure it doesn't double-archive, but it's safe if it overwrites.
+            result = ingest_direct_from_file(path)
+            print(f"Ingestion Result: {result}")
+        finally:
+            # Optional cleanup, or keep for debugging
+            # if os.path.exists(path): os.remove(path)
+            pass
+
+    background_tasks.add_task(process_full_ingestion, file_path)
+    
+    return {"status": "success", "message": "Ingestion & Transformation Triggered in Background."}
+
+# DEPRECATED INGEST ENDPOINT - KEPT FOR COMPATIBILITY
+
+
 @app.post("/predict")
 async def predict_eta(
     background_tasks: BackgroundTasks,
@@ -904,11 +990,30 @@ async def predict_eta(
     # 'train' comes as string "true"/"false" from JS FormData
     is_training = train.lower() == 'true'
 
+    import warnings
+    warnings.filterwarnings("ignore")
+
     # --- 1. DATA LOADING & VALIDATION ---
     if file:
         # BATCH MODE (CSV)
         try:
-            df = pd.read_csv(file.file)
+            # Fix DtypeWarning by using low_memory=False
+            df = pd.read_csv(file.file, low_memory=False)
+            
+            # ----------------------------------------------------
+            # PETA MAPPING SUPPORT
+            # If uploaded file is PETA format, map to Expected Prediction Columns
+            # ----------------------------------------------------
+            peta_map = {
+                'PORT_OF_DEP': 'PolCode',
+                'PORT_OF_ARR': 'PodCode',
+                'MODE_OF_TRANSPORT': 'ModeOfTransport' # Assuming implied or present
+            }
+            renames = {k:v for k,v in peta_map.items() if k in df.columns and v not in df.columns}
+            if renames:
+                df.rename(columns=renames, inplace=True)
+                print(f"Mapped columns: {renames}")
+
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid CSV: {e}")
             
@@ -917,13 +1022,20 @@ async def predict_eta(
         
         # Vectorized check
         def check_row(row):
-            s = get_continent(row.get('PolCode'))
-            d = get_continent(row.get('PodCode'))
-            m = str(row.get('ModeOfTransport')).upper().strip()
-            if s != 'UNKNOWN' and d != 'UNKNOWN' and s != d:
-                if m in ['ROAD', 'RAIL', 'TRUCK']:
-                    return False
-            return True
+            try:
+                s = get_continent(row.get('PolCode'))
+                d = get_continent(row.get('PodCode'))
+                
+                # Default to OCEAN if mode missing, just for validation safety
+                raw_mode = row.get('ModeOfTransport')
+                m = str(raw_mode).upper().strip() if pd.notnull(raw_mode) else 'OCEAN'
+                
+                if s != 'UNKNOWN' and d != 'UNKNOWN' and s != d:
+                    if m in ['ROAD', 'RAIL', 'TRUCK']:
+                        return False
+                return True
+            except Exception:
+                return True # conservative: keep row if check fails
             
         df = df[df.apply(check_row, axis=1)]
         if len(df) < initial_count:
