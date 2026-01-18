@@ -147,26 +147,52 @@ def run_transformation():
         # =====================================================
         # DIM_VEHICLE – insert only NEW IMO
         # =====================================================
-        print("🔄 Loading DIM_VEHICLE...")
+                print("🔄 Loading DIM_VEHICLE...")
+
+        # ------------------------------------------------------------------
+        # Step 1: Prepare source vessel dataframe
+        # ------------------------------------------------------------------
         vehicle_df = peta_df[[
-            "VESSEL_IMO", "VESSEL_NAME", "VESSEL_MMSI", "VESSEL_CALL_SIGN"
+            "VESSEL_IMO",
+            "VESSEL_NAME",
+            "VESSEL_MMSI",
+            "VESSEL_CALL_SIGN"
         ]].dropna(subset=["VESSEL_IMO"]).drop_duplicates()
 
+        # ------------------------------------------------------------------
+        # Step 2: Read existing vehicle keys from DIM_VEHICLE
+        # ------------------------------------------------------------------
         try:
-            existing_vehicles = pd.read_sql(
+            dim_vehicle_df = pd.read_sql(
                 "SELECT VEHICLE_NUMBER FROM HACAKATHON.DT_INGESTION.DIM_VEHICLE",
                 conn
             )
-            existing_imos = set(existing_vehicles["VEHICLE_NUMBER"].tolist()) if not existing_vehicles.empty else set()
-        except:
-            existing_imos = set()
+        except Exception:
+            dim_vehicle_df = pd.DataFrame(columns=["VEHICLE_NUMBER"])
 
-        new_vehicles = vehicle_df[
-            ~vehicle_df["VESSEL_IMO"].isin(existing_imos)
-        ].copy()
+        # ------------------------------------------------------------------
+        # Step 3: LEFT JOIN to identify only new vessels
+        # ------------------------------------------------------------------
+        new_vehicles = (
+            vehicle_df
+                .merge(
+                    dim_vehicle_df,
+                    how="left",
+                    left_on="VESSEL_IMO",
+                    right_on="VEHICLE_NUMBER",
+                    indicator=True
+                )
+                .query("_merge == 'left_only'")
+                .drop(columns=["VEHICLE_NUMBER", "_merge"])
+        )
 
+        # ------------------------------------------------------------------
+        # Step 4: Insert new vessels into DIM_VEHICLE
+        # ------------------------------------------------------------------
         if not new_vehicles.empty:
+            # Convert NaN → None for database inserts
             new_vehicles = new_vehicles.where(pd.notnull(new_vehicles), None)
+
             cs.executemany(
                 """
                 INSERT INTO HACAKATHON.DT_INGESTION.DIM_VEHICLE
@@ -175,9 +201,10 @@ def run_transformation():
                 """,
                 new_vehicles.to_dict("records")
             )
+
             print(f"   ✅ DIM_VEHICLE: {len(new_vehicles)} new rows.")
         else:
-             print("   ℹ️ DIM_VEHICLE: No new rows.")
+            print("   ℹ️ DIM_VEHICLE: No new rows.")
 
         # =====================================================
         # DIM_PORT – from ARR + DEP (insert only NEW ports)
