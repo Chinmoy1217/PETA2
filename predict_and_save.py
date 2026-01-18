@@ -10,7 +10,7 @@ from backend.config import SNOWFLAKE_CONFIG
 import uuid
 
 # API Configuration
-API_URL = "http://localhost:8005/simulate"
+API_URL = "http://localhost:8000/simulate"
 
 # Snowflake Connection
 def get_snowflake_connection():

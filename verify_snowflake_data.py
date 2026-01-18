@@ -21,9 +21,10 @@ try:
             POD_CODE,
             CARRIER_SCAC_CODE,
             DEPARTURE_DATE,
-            PREDICTED_HOURS,
-            PREDICTED_DAYS,
-            ARRIVAL_DATE,
+            DEPARTURE_DATE,
+            PETA_HOURS,
+            PETA_DAYS,
+            PETA_DATETIME,
             CONGESTION_LEVEL,
             WEATHER_SEVERITY,
             PREDICTION_TIMESTAMP

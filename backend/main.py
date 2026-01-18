@@ -599,6 +599,15 @@ def predict_risk(req: RiskRequest):
     except Exception as e:
         return {"error": str(e)}
 
+@app.post("/sync-snowflake")
+def sync_snowflake(background_tasks: BackgroundTasks):
+    """Triggers model retraining with latest Snowflake data"""
+    try:
+        background_tasks.add_task(retrain_model)
+        return {"status": "success", "message": "Snowflake Sync & Retraining Started"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/carriers")
 def get_carriers():
     """Model 3: Returns ranked carriers by reliability"""
@@ -666,14 +675,43 @@ def get_active_shipments():
 
 def prepare_input(df):
     # For XGBoost (Native DMatrix)
-    FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']
+    # Patching prepare_input to include seasonality
     df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
     
     encoded_df = df.copy()
-    for col in FEATURES:
+    for col in ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']:
         mapping = encoders.get(col, {})
-        # Handle unknown categories by mapping to 0 (or generic unknown if we had one)
         encoded_df[col] = encoded_df[col].astype(str).map(lambda s: mapping.get(s, 0))
+    
+    # Add Seasonality (Simulate uses Now)
+    now = pd.Timestamp.now()
+    encoded_df['Departure_Month'] = int(now.month)
+    encoded_df['Departure_Week'] = int(now.isocalendar().week)
+    encoded_df['Departure_Quarter'] = int(now.quarter)
+    
+    # Add other missing numerics as 0
+    NUMERIC = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
+    for c in NUMERIC: encoded_df[c] = 0.0
+
+    # Note: Carrier is missing in SimulationRequest usually, so we skip it or mock it.
+    # SimulationRequest doesn't have carrier. The model *expects* Carrier and Carrier_Target_Enc.
+    # We must add them.
+    encoded_df['Carrier'] = 0 # Unknown
+    
+    # Note: Carrier is missing in SimulationRequest usually, so we skip it or mock it.
+    # SimulationRequest doesn't have carrier. The model *expects* Carrier and Carrier_Target_Enc.
+    # We must add them.
+    encoded_df['Carrier'] = 0 # Unknown
+    
+    # EXACT ORDER matching model (18 features)
+    FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier',
+                'External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
     
     return encoded_df[FEATURES]
 
@@ -903,14 +941,45 @@ async def predict_eta(
 
         # Feature Engineering
         df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
-        
+        if 'Carrier' not in df.columns: df['Carrier'] = 'UNKNOWN'
+        df['Route_Carrier'] = df['Route'] + "_" + df['Carrier'].astype(str)
+
+        # Encode Categoricals
         encoded_df = df.copy()
-        for col in ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']:
+        CAT_FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier']
+        for col in CAT_FEATURES:
             mapping = encoders.get(col, {})
-            # Handle unknown keys (0)
             encoded_df[col] = encoded_df[col].astype(str).map(lambda s: mapping.get(s, 0))
+
+        # Add Missing Numeric Features (Defaults)
+        NUMERIC_FEATURES = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                            'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                            'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                            'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
+        
+        for col in NUMERIC_FEATURES:
+            if col not in encoded_df.columns:
+                encoded_df[col] = 0.0
+
+        # Add Missing Numeric Features (Defaults)
+        NUMERIC_FEATURES = ['External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                            'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                            'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                            'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
+        
+        for col in NUMERIC_FEATURES:
+            if col not in encoded_df.columns:
+                encoded_df[col] = 0.0
+
+        # EXACT ORDER matching model (18 features)
+        # Removed Seasonality to match persistent artifact
+        FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier',
+                    'External_Risk_Score', 'BASE_ETA_DAYS', 'WEATHER_RISK_SCORE',
+                    'GEOPOLITICAL_RISK_SCORE', 'LABOR_STRIKE_SCORE', 'CUSTOMS_DELAY_SCORE', 
+                    'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
+                    'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
             
-        dmat = xgb.DMatrix(encoded_df[['PolCode', 'PodCode', 'ModeOfTransport', 'Route']])
+        dmat = xgb.DMatrix(encoded_df[FEATURES])
         preds = np.expm1(bst.predict(dmat))
         
         # Format Results for Single Simulation vs Batch

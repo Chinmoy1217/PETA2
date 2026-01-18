@@ -76,7 +76,46 @@ def check_snowflake_training():
     except Exception as e:
         log(f"❌ Sync Error: {e}")
 
+def check_auxiliary_data():
+    print("\n--- 4. AUXILIARY DATA CHECK ---")
+    endpoints = ["/locations", "/carriers", "/metrics", "/plots", "/active"]
+    
+    for ep in endpoints:
+        try:
+            resp = requests.get(f"{BASE_URL}{ep}")
+            if resp.status_code == 200:
+                data = resp.json()
+                count = len(data) if isinstance(data, list) else len(data.keys())
+                log(f"✅ {ep}: Online (Returned {count} items)")
+            else:
+                log(f"❌ {ep}: Failed {resp.status_code}")
+        except Exception as e:
+             log(f"❌ {ep}: Error {e}")
+
+def check_tracking():
+    print("\n--- 5. TRACKING API CHECK ---")
+    # Need a valid ID. If /active works, we can pick one.
+    try:
+        # Get active list first
+        resp = requests.get(f"{BASE_URL}/active")
+        if resp.status_code == 200 and len(resp.json()) > 0:
+            sample_id = resp.json()[0]['id']
+            log(f"Testing Tracking for ID: {sample_id}")
+            
+            track_resp = requests.get(f"{BASE_URL}/track/{sample_id}")
+            if track_resp.status_code == 200:
+                 log(f"✅ /track/{sample_id}: Success")
+                 log(f"   -> Status: {track_resp.json().get('status')}")
+            else:
+                 log(f"❌ /track Failed: {track_resp.status_code}")
+        else:
+            log("⚠️ Skipping /track check (No active shipments found to test against)")
+    except Exception as e:
+        log(f"❌ Tracking Check Error: {e}")
+
 if __name__ == "__main__":
     if check_health():
         check_inference()
         check_snowflake_training()
+        check_auxiliary_data()
+        check_tracking()
