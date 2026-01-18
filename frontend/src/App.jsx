@@ -23,7 +23,7 @@ function App() {
   const [metrics, setMetrics] = useState(null);
   const [plots, setPlots] = useState(null);
   const [theme, setTheme] = useState('dark');
-  const API_URL = "http://127.0.0.1:8000";
+  const API_URL = `${window.location.protocol}//${window.location.hostname}:8000`;
 
   useEffect(() => {
     document.body.className = theme;
