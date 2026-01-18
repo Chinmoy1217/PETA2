@@ -778,20 +778,27 @@ function UploadView({ API_URL }) {
     setStatus(null);
   };
 
+  const [uploadedFilename, setUploadedFilename] = useState(null);
+
   const handleSync = async () => {
     if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
 
     try {
-      setStatus('Syncing to Azure Cloud...');
+      setStatus('⏳ Uploading to Azure & Checking Quality...');
       const res = await fetch(`${API_URL}/upload`, { method: 'POST', body: fd });
       const data = await res.json();
+
       if (data.status === 'success') {
         setIsSynced(true);
-        setStatus('✅ File synced to Azure Blob Storage successfully. Ready to Ingest.');
+        setUploadedFilename(data.filename); // Store filename for ingest
+        setStatus(`✅ CHECK PASSED (Accuracy: ${data.accuracy}%)\nCloud Upload Complete.\nProceed to Ingestion.`);
+      } else if (data.status === 'warning') {
+        setIsSynced(false);
+        setStatus(`⚠️ CHECK FAILED (Accuracy: ${data.accuracy}%)\nFile Uploaded to Archive Only.\n${data.message}`);
       } else {
-        setStatus(`❌ Sync failed: ${data.message}`);
+        setStatus(`❌ Error: ${data.message}`);
       }
     } catch (err) {
       console.error("Sync Error:", err);
@@ -800,12 +807,17 @@ function UploadView({ API_URL }) {
   };
 
   const handleIngest = async () => {
+    if (!uploadedFilename) return;
     try {
-      setStatus('⏳ Triggering Snowflake Ingestion...');
-      const res = await fetch(`${API_URL}/ingest`, { method: 'POST' });
+      setStatus('⏳ Triggering Ingestion & Transformation...');
+      const res = await fetch(`${API_URL}/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: uploadedFilename })
+      });
       const data = await res.json();
       if (data.status === 'success') {
-        setStatus('✅ Ingestion Triggered! Check Backend Logs for progress.');
+        setStatus(`✅ ${data.message}\nCheck logs for details.`);
       } else {
         setStatus(`❌ Ingestion failed: ${data.message}`);
       }
@@ -865,22 +877,43 @@ function UploadView({ API_URL }) {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
-            {file && !isSynced && (
-              <button className="action-btn" onClick={handleSync} style={{ background: '#f59e0b' }}>1. Sync to Azure</button>
-            )}
+            {/* Step 1: Upload & Check */}
+            <button
+              className="action-btn"
+              onClick={handleSync}
+              disabled={!file}
+              style={{ background: file ? '#f59e0b' : '#64748b' }}
+            >
+              1. Upload & Check Quality
+            </button>
+
+            {/* Step 2: Ingest (Only if Uploaded/Synced) */}
             {file && isSynced && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <button className="action-btn" onClick={handleIngest} style={{ background: '#10b981' }}>2. Ingest to Snowflake</button>
-                <button className="action-btn" onClick={handleProcess} style={{ background: '#3b82f6' }}>3. Process for Insights</button>
-              </div>
+              <button
+                className="action-btn"
+                onClick={handleIngest}
+                style={{ background: '#10b981' }}
+              >
+                2. Ingest & Transform
+              </button>
             )}
           </div>
 
           {status && (
-            <div style={{ marginTop: '1.5rem', padding: '0.8rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.05)', fontSize: '0.9rem', color: status.includes('✅') ? '#10b981' : status.includes('❌') ? '#ef4444' : '#f59e0b' }}>
-              {status}
+            <div style={{ marginTop: '1.5rem', padding: '1rem', borderRadius: '0.5rem', background: 'rgba(255,255,255,0.1)', fontSize: '0.95rem', color: '#e2e8f0' }}>
+              <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', margin: 0 }}>{status}</pre>
             </div>
           )}
+
+          {/* Show Process button only if synced/ingested successfully */}
+          {file && isSynced && (
+            <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+              <button className="action-btn" onClick={handleProcess} style={{ background: '#10b981' }}>Proceed to Insights</button>
+            </div>
+          )}
+
+
+
         </div>
 
         {/* Database Upload Option */}

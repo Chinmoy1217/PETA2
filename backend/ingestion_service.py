@@ -239,20 +239,24 @@ def ingest_direct_from_file(file_path):
         
     try:
         file_name = os.path.basename(file_path)
-        table_name = os.path.splitext(file_name)[0]
+        
+        
+        # Switch to correct schema first to avoid stage syntax issues
+        with conn.cursor() as cur:
+            cur.execute("USE SCHEMA HACAKATHON.DT_PREP")
+            
+        print("➡️ Switched to schema: HACAKATHON.DT_PREP")
+        
+        target_table = "PETA"
         
         # 1. Ensure Table Exists
-        if not table_exists(conn, table_name):
-             print(f"❌ Table '{table_name}' does not exist. Please create it first.")
-             return {"status": "error", "message": f"Table '{table_name}' not found"}
-
-        print(f"✅ Table '{table_name}' found.")
+        # (Assuming it exists for now)
         
         # 2. Upload to Internal Stage
-        print(f"📤 Uploading {file_name} to internal stage @%{table_name}...")
+        print(f"📤 Uploading {file_name} to internal stage @%{target_table}...")
         
         safe_path = file_path.replace("\\", "/")
-        put_sql = f"PUT file://{safe_path} @%{table_name} AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
+        put_sql = f"PUT file://{safe_path} @%{target_table} AUTO_COMPRESS=FALSE OVERWRITE=TRUE"
         
         with conn.cursor() as cur:
             cur.execute(put_sql)
@@ -260,14 +264,15 @@ def ingest_direct_from_file(file_path):
         print("✅ Upload to Snowflake Internal Stage complete.")
         
         # 3. Copy into Table
-        print(f"📥 Loading data into {table_name}...")
+        print(f"📥 Loading data into {target_table}...")
         copy_sql = f"""
-            COPY INTO {table_name}
-            FROM @%{table_name}/{file_name}
+            COPY INTO {target_table}
+            FROM @%{target_table}/{file_name}
             FILE_FORMAT = (
                 TYPE = CSV
                 SKIP_HEADER = 1
                 FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+                NULL_IF = ('') 
             )
             ON_ERROR = 'CONTINUE';
         """
@@ -278,13 +283,19 @@ def ingest_direct_from_file(file_path):
             for row in results:
                 print(f"   ➜ COPY RESULT: {row}")
                 
-        print(f"✅ Data successfully loaded into '{table_name}'")
+        print(f"✅ Data successfully loaded into '{target_table}'")
         
         # 4. Upload to Azure Archive (REST)
-        # Since we skipped Azure 'input', we upload directly to 'Archieve' for audit trails
         upload_to_archive_rest(file_path)
 
-        return {"status": "success", "message": "Direct Ingestion & Archival Complete"}
+        # 5. Run Data Transformation (Script 2)
+        from backend.data_transformation import run_transformation
+        transform_res = run_transformation()
+        
+        if transform_res.get("status") == "success":
+             return {"status": "success", "message": "Ingestion, Archival & Transformation Complete"}
+        else:
+             return {"status": "warning", "message": f"Ingestion OK, but Transformation failed: {transform_res.get('message')}"}
         
     except Exception as e:
         print(f"❌ Direct Ingestion Error: {e}")
