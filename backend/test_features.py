@@ -19,6 +19,7 @@ def test_simulate():
             print("✅ /simulate Success")
             print(f"   -> AI Prediction: {resp.json().get('prediction_hours')} hours")
             print(f"   -> Risk Score: {resp.json().get('risk_score')}")
+            print(f"   -> Explanation Snippet: {resp.json().get('ai_explanation')[:150]}...")
         else:
             print(f"❌ /simulate Failed: {resp.status_code} - {resp.text}")
     except Exception as e:

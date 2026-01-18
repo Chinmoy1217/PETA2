@@ -294,10 +294,23 @@ def get_rich_features(pol, pod, mode, carrier):
         "carrier_reliability": round(carrier_score * 100, 1)
     }
 
-def retrain_model():
+def retrain_model(current_row_count=None):
     global bst, encoders, rf_model, lr_model, risk_model, reliability_model
     print("Starting Model Retraining (Native Snowflake with Advanced Features)...")
     
+    # Load Baseline State for Self-Healing
+    baseline_acc = 0.0
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                baseline_acc = state.get('accuracy_pct', 0.0)
+                if current_row_count is None:
+                    current_row_count = state.get('row_count', 0)
+        except: pass
+    
+    print(f"🛡️ Self-Healing Guardrail Active. Baseline Accuracy: {baseline_acc}%")
+
     try:
         # 1. LOAD DATA (Hybrid: CSV + Snowflake)
         # Load local CSV first
@@ -599,14 +612,55 @@ def predict_risk(req: RiskRequest):
     except Exception as e:
         return {"error": str(e)}
 
-@app.post("/sync-snowflake")
-def sync_snowflake(background_tasks: BackgroundTasks):
-    """Triggers model retraining with latest Snowflake data"""
+# State File Path
+STATE_FILE = os.path.join(MODEL_DIR, "data_state.json")
+
+def check_data_freshness():
+    """Returns (has_changed, new_count, current_count)"""
     try:
-        background_tasks.add_task(retrain_model)
-        return {"status": "success", "message": "Snowflake Sync & Retraining Started"}
+        # 1. Get Current Count from Snowflake
+        conn = get_snowflake_connection()
+        if not conn: return (True, 0, 0) # Fallback to retrain if check fails
+        
+        cs = conn.cursor()
+        cs.execute("SELECT COUNT(*) FROM DT_INGESTION.FACT_TRIP")
+        new_count = cs.fetchone()[0]
+        conn.close()
+        
+        # 2. Get Last Known Count
+        last_count = 0
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+                last_count = state.get('row_count', 0)
+        
+        has_changed = new_count > last_count
+        return (has_changed, new_count, last_count)
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Freshness Check Error: {e}")
+        return (True, 0, 0) # Default to retrain on error
+
+@app.post("/sync-snowflake")
+def sync_snowflake(background_tasks: BackgroundTasks, force: bool = False):
+    """Triggers model retraining if data has changed, or if forced."""
+    changed, new_cnt, old_cnt = check_data_freshness()
+    
+    if force or changed:
+        reason = "Manual Force" if force else f"Data Increased ({old_cnt} -> {new_cnt})"
+        print(f"Triggering Retrain: {reason}")
+        background_tasks.add_task(retrain_model, new_cnt)
+        return {
+            "status": "success", 
+            "message": f"Retraining Started. Reason: {reason}",
+            "data_change": {"old": old_cnt, "new": new_cnt}
+        }
+    else:
+        return {
+            "status": "skipped", 
+            "message": "No new data detected.",
+            "data_change": {"old": old_cnt, "new": new_cnt}
+        }
 
 @app.get("/carriers")
 def get_carriers():
@@ -737,9 +791,9 @@ def simulate_trip(req: SimulationRequest):
         
         # 3. Decision Logic
         candidates = [
-            {'name': 'XGBoost', 'pred': pred_xgb, 'score': model_metrics.get('XGBoost', 0)},
-            {'name': 'Random Forest', 'pred': pred_rf, 'score': model_metrics.get('Random Forest', 0)},
-            {'name': 'Linear Regression', 'pred': pred_lr, 'score': model_metrics.get('Linear Regression', 0)}
+            {'name': 'XGBoost', 'pred': pred_xgb, 'score': model_metrics.get('xgboost', 0)},
+            {'name': 'Random Forest', 'pred': pred_rf, 'score': model_metrics.get('random_forest', 0)},
+            {'name': 'Linear Regression', 'pred': pred_lr, 'score': model_metrics.get('linear_regression', 0)}
         ]
         
         # Pick winner
