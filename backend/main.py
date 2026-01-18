@@ -11,6 +11,7 @@ import numpy as np
 import pickle
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+
 # from dotenv import load_dotenv
 
 # Load environment variables from .env file
