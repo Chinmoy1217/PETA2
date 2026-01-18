@@ -830,7 +830,7 @@ function UploadView({ API_URL }) {
     if (!file || !isSynced) return;
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('train', learn);
+    // fd.append('train', learn); // Removed feature
 
     try {
       setStatus('Processing file for insights...');
@@ -863,18 +863,7 @@ function UploadView({ API_URL }) {
 
           {file && <p style={{ color: '#10b981', marginTop: '1rem' }}>Selected: {file.name}</p>}
 
-          <div style={{ margin: '1.5rem 0 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              checked={learn}
-              onChange={e => setLearn(e.target.checked)}
-              id="learn-toggle"
-              style={{ width: 'auto' }}
-            />
-            <label htmlFor="learn-toggle" style={{ margin: 0, color: '#e2e8f0', cursor: 'pointer' }}>
-              Teach model with this data (Continuous Learning)
-            </label>
-          </div>
+
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', justifyContent: 'center', marginTop: '1rem' }}>
             {/* Step 1: Upload & Check */}

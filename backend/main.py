@@ -962,12 +962,9 @@ async def trigger_ingestion(req: IngestRequest, background_tasks: BackgroundTask
     def process_full_ingestion(path):
         try:
             # This function in ingestion_service.py now handles Ingest + Archive + Transform
-            # We might want to ensure it doesn't double-archive, but it's safe if it overwrites.
             result = ingest_direct_from_file(path)
             print(f"Ingestion Result: {result}")
         finally:
-            # Optional cleanup, or keep for debugging
-            # if os.path.exists(path): os.remove(path)
             pass
 
     background_tasks.add_task(process_full_ingestion, file_path)
