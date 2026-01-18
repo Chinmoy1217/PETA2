@@ -200,13 +200,12 @@
   /* Reset sidebar margin */
   padding-top: 70px;
   /* Space for fixed top bar */
-  max-width: 1600px;
-  margin: 0 auto;
-  padding-left: 1rem;
-  padding-right: 1rem;
-  padding-bottom: 1rem;
-  flex: 1;
   width: 100%;
+  margin: 0;
+  padding-left: 2rem;
+  padding-right: 2rem;
+  padding-bottom: 2rem;
+  flex: 1;
 }
 
 .fade-in-content {
@@ -273,9 +272,9 @@
 /* Cards */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.8rem;
-  margin-bottom: 1.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .glass-card {
@@ -547,4 +546,152 @@ td {
   width: auto;
   object-fit: contain;
   margin-right: 4rem;
+}
+
+/* --- SIMULATOR LIGHT THEME OVERRIDES --- */
+.simulator-container .glass-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  backdrop-filter: none;
+}
+
+.simulator-container h3,
+.simulator-container h2,
+.simulator-container label {
+  color: #0f172a;
+}
+
+.simulator-container input,
+.simulator-container select {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #1e293b;
+}
+
+.simulator-container input:focus,
+.simulator-container select:focus {
+  background: white;
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+}
+
+.simulator-container .metric-box {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.simulator-container .metric-box .label {
+  color: #64748b;
+}
+
+.simulator-container .metric-box .value {
+  color: #0f172a;
+}
+
+.simulator-container .result-time {
+  color: #15803d;
+  /* Darker green for white bg */
+}
+
+/* Result Box Specifics */
+.simulator-container .result-box {
+  background: #f0fdf4;
+  /* Light green tint */
+  border: 1px solid #bbf7d0;
+}
+
+.simulator-container .result-header h2 {
+  color: #166534;
+}
+
+.simulator-container .result-header svg {
+  color: #15803d;
+}
+
+/* Intelligence Panel Overrides */
+.simulator-container .metric-box[style*="rgba(59, 130, 246, 0.1)"] {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+.simulator-container .metric-box[style*="rgba(239, 68, 68, 0.1)"] {
+  background: #fef2f2 !important;
+  border-color: #fecaca !important;
+}
+
+.simulator-container .metric-box .label[style*="#93c5fd"] {
+  color: #1e40af !important;
+}
+
+.simulator-container .metric-box .label[style*="#fca5a5"] {
+  color: #991b1b !important;
+}
+
+.simulator-container .metric-box .value[style*="#fff"] {
+  color: #1e293b !important;
+}
+
+/* AI Analysis Text */
+/* AI Analysis Text */
+.simulator-container .ai-analysis-text {
+  color: #334155;
+}
+
+/* Bottom Bar */
+.simulator-container div[style*="background: rgba(255,255,255,0.03)"] {
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0;
+}
+
+.simulator-container div[style*="color: #64748b"] {
+  color: #475569 !important;
+}
+
+.simulator-container .result-time span {
+  color: #64748b !important;
+}
+
+.simulator-container .error-banner {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  padding: 1rem;
+  border-radius: 0.5rem;
+}
+
+/* --- BATCH PREDICT LIGHT THEME OVERRIDES --- */
+.batch-container {
+  background: white !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+
+.batch-container p,
+.batch-container label,
+.batch-container h3,
+.batch-container .stat-header {
+  color: #0f172a !important;
+}
+
+.batch-container .upload-area {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc;
+}
+
+.batch-container table th {
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.batch-container table td {
+  color: #0f172a;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* Header Icon Hover */
+.icon-btn-header:hover svg {
+  color: #3b82f6 !important;
+  transition: color 0.2s;
 }

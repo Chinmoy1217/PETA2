@@ -3,7 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area, PieChart, Pie
 } from 'recharts';
-import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download, Menu, X } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, Calculator, Activity, Ship, CheckCircle, TrendingUp, AlertTriangle, Download, Menu, X, MessageSquare, Bell } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -55,11 +55,23 @@ function App() {
           <Menu size={24} color="#0f172a" />
         </button>
         <div className="brand">
-          <Truck className="brand-icon" size={24} />
+          <Ship className="brand-icon" size={24} />
           <span>ETA Insight</span>
         </div>
         <div style={{ flex: 1 }}></div>
-        {/* Optional: Add user profile or model status here if needed */}
+        <div style={{ flex: 1 }}></div>
+
+        {/* Action Icons */}
+        <div style={{ display: 'flex', gap: '1rem', marginRight: '1.5rem' }}>
+          <button className="icon-btn-header" style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'relative' }}>
+            <MessageSquare size={20} color="#64748b" />
+          </button>
+          <button className="icon-btn-header" style={{ background: 'none', border: 'none', cursor: 'pointer', position: 'relative' }}>
+            <Bell size={20} color="#64748b" />
+            <span style={{ position: 'absolute', top: -2, right: -2, width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%' }}></span>
+          </button>
+        </div>
+
         <img src={cozentusLogo} alt="Cozentus Logo" className="header-logo" />
       </div>
 
@@ -166,8 +178,7 @@ function SummaryView({ metrics }) {
         display: 'grid',
         gridTemplateColumns: 'repeat(3, 1fr)',
         gap: '1.5rem',
-        width: '100%',
-        maxWidth: '1200px'
+        width: '100%'
       }}>
         {/* Metric 1 */}
         <div style={{ padding: '0 1rem' }}>
@@ -214,7 +225,6 @@ function SummaryView({ metrics }) {
         marginTop: '2rem',
         textAlign: 'left',
         width: '100%',
-        maxWidth: '1000px',
         animation: 'fadeInUp 0.6s ease-out 0.3s backwards'
       }}>
         <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1e293b', marginBottom: '1rem', borderBottom: '2px solid rgba(0,0,0,0.1)', paddingBottom: '0.5rem' }}>
@@ -241,9 +251,10 @@ function SummaryView({ metrics }) {
           </div>
         </div>
       </div>
-    </div>
+    </div >
   );
 }
+
 
 function DashboardView({ metrics, plots }) {
   const [comparison, setComparison] = useState([]);
@@ -260,29 +271,29 @@ function DashboardView({ metrics, plots }) {
       <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', fontSize: '0.9rem' }}>Core Performance</h3>
       <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header">📦 Total Shipments</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>📦</span> Total Shipments</div>
           <div className="stat-value">{metrics.total_shipments?.toLocaleString()}</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">✅ On-Time Delivery %</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>✅</span> On-Time Delivery %</div>
           <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_rate}%</div>
           <div className="sub-text">ETA Accuracy</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">🕒 Late Shipments</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🕒</span> Late Shipments</div>
           <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.late_shipments_count?.toLocaleString()}</div>
           <div className="sub-text">{metrics.delayed_rate}% of Total</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">⏳ Avg Delay</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>⏳</span> Avg Delay</div>
           <div className="stat-value" style={{ color: '#f59e0b' }}>{metrics.avg_delay_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">🚨 Max Delay</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🚨</span> Max Delay</div>
           <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.max_delay_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">⚠️ Critical Delays</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>⚠️</span> Critical Delays</div>
           <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics.critical_delays_count}</div>
           <div className="sub-text">&gt; 3 Days</div>
         </div>
@@ -292,15 +303,15 @@ function DashboardView({ metrics, plots }) {
       <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', marginTop: '0.8rem', fontSize: '0.9rem' }}>ETA Variance</h3>
       <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header">🔄 Avg Variance</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🔄</span> Avg Variance</div>
           <div className="stat-value">{metrics.avg_eta_variance_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">🚀 Early Arrivals</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🚀</span> Early Arrivals</div>
           <div className="stat-value" style={{ color: '#3b82f6' }}>{metrics.early_arrival_rate}%</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">🎯 On-Time Arrivals</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🎯</span> On-Time Arrivals</div>
           <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_arrival_rate}%</div>
         </div>
       </div>
@@ -310,19 +321,30 @@ function DashboardView({ metrics, plots }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '1rem' }}>
 
         {/* Mode Accuracy */}
+        {/* Mode Accuracy - Donut Chart */}
         <div className="glass-card chart-container">
-          <div className="stat-header">By Transport Mode</div>
+          <div className="stat-header">By Transport Mode (Donut)</div>
           <ResponsiveContainer width="100%" height={150}>
-            <BarChart data={metrics.mode_accuracy || []} layout="vertical">
-              <XAxis type="number" domain={[80, 100]} hide />
-              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={60} style={{ fontSize: '0.8rem' }} />
+            <PieChart>
+              <Pie
+                data={metrics.mode_accuracy || []}
+                cx="50%"
+                cy="50%"
+                innerRadius={40}
+                outerRadius={60}
+                dataKey="value"
+                nameKey="name"
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              >
+                {(metrics.mode_accuracy || []).map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444'][index % 4]} />
+                ))}
+              </Pie>
               <Tooltip
-                cursor={{ fill: 'transparent' }}
                 contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
                 itemStyle={{ color: '#fff' }}
               />
-              <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
-            </BarChart>
+            </PieChart>
           </ResponsiveContainer>
         </div>
 
@@ -656,7 +678,7 @@ function SimulatorView({ API_URL }) {
   const simResult = result?.predictions?.[0];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 2fr', gap: '2rem', alignItems: 'start' }}>
+    <div className="simulator-container" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 2fr', gap: '2rem', alignItems: 'start' }}>
       <div className="glass-card">
         <h3 style={{ marginTop: 0 }}>Trip Parameters</h3>
         <div className="form-group">
@@ -698,7 +720,7 @@ function SimulatorView({ API_URL }) {
             type="range" min="0" max="100"
             value={scenario.congestion}
             onChange={e => setScenario({ ...scenario, congestion: e.target.value })}
-            style={{ width: '100%', accentColor: '#f59e0b' }}
+            style={{ width: '100%', accentColor: '#f59e0b', padding: 0 }}
           />
         </div>
 
@@ -711,7 +733,7 @@ function SimulatorView({ API_URL }) {
             type="range" min="0" max="100"
             value={scenario.weather}
             onChange={e => setScenario({ ...scenario, weather: e.target.value })}
-            style={{ width: '100%', accentColor: '#3b82f6' }}
+            style={{ width: '100%', accentColor: '#3b82f6', padding: 0 }}
           />
         </div>
 
@@ -758,15 +780,15 @@ function SimulatorView({ API_URL }) {
             {/* Intelligence Panel (Hackathon Feature) */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div className="metric-box" style={{ background: 'rgba(59, 130, 246, 0.1)', border: '1px solid #3b82f6' }}>
-                <div className="label" style={{ color: '#93c5fd' }}>Prediction Confidence</div>
-                <div className="value" style={{ color: '#fff' }}>{simResult.confidence_score}%</div>
+                <div className="label">Prediction Confidence</div>
+                <div className="value">{simResult.confidence_score}%</div>
                 <div className="progress-bar" style={{ height: '4px', background: '#1e3a8a', marginTop: '5px', borderRadius: '2px' }}>
                   <div style={{ width: `${simResult.confidence_score}%`, height: '100%', background: '#3b82f6' }}></div>
                 </div>
               </div>
               <div className="metric-box" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444' }}>
-                <div className="label" style={{ color: '#fca5a5' }}>Route Risk Score</div>
-                <div className="value" style={{ color: '#fff' }}>{simResult.risk_score} <span style={{ fontSize: '0.8rem', color: '#fca5a5' }}>/ 100</span></div>
+                <div className="label">Route Risk Score</div>
+                <div className="value">{simResult.risk_score} <span style={{ fontSize: '0.8rem' }}>/ 100</span></div>
                 <div className="progress-bar" style={{ height: '4px', background: '#7f1d1d', marginTop: '5px', borderRadius: '2px' }}>
                   <div style={{ width: `${simResult.risk_score}%`, height: '100%', background: '#ef4444' }}></div>
                 </div>
@@ -776,10 +798,10 @@ function SimulatorView({ API_URL }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1rem', padding: '1.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px' }}>
               <div>
                 <div style={{ color: '#aaa', fontSize: '0.9rem' }}>Predicted Duration</div>
-                <div className="result-time" style={{ fontSize: '3rem', fontWeight: 'bold', color: '#fff' }}>
-                  {Math.round(simResult.prediction_hours)} <span style={{ fontSize: '1rem', color: '#64748b', fontWeight: 'normal' }}>hours</span>
+                <div className="result-time" style={{ fontSize: '3rem', fontWeight: 'bold' }}>
+                  {Math.round(simResult.prediction_hours)} <span style={{ fontSize: '1rem', fontWeight: 'normal' }}>hours</span>
                 </div>
-                <div style={{ color: '#64748b', fontSize: '0.9rem' }}>({simResult.prediction_days} days)</div>
+                <div className="duration-text" style={{ fontSize: '0.9rem' }}>({simResult.prediction_days} days)</div>
               </div>
               {/* Transshipment Badge */}
               {simResult.route_details?.via_port !== 'DIRECT' && (
@@ -796,7 +818,7 @@ function SimulatorView({ API_URL }) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', fontWeight: 'bold', marginBottom: '0.5rem' }}>
                 <TrendingUp size={18} /> AI Analysis
               </div>
-              <div style={{ fontSize: '0.9rem', color: '#e2e8f0', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
+              <div className="ai-analysis-text" style={{ fontSize: '0.9rem', lineHeight: '1.6', whiteSpace: 'pre-line' }}>
                 {simResult.ai_explanation}
               </div>
             </div>
@@ -834,7 +856,7 @@ function UploadView({ API_URL }) {
   };
 
   return (
-    <div className="glass-card">
+    <div className="glass-card batch-container">
       <div className="upload-area" style={{ textAlign: 'center', padding: '2rem', border: '2px dashed #94a3b8', borderRadius: '1rem', marginBottom: '2rem' }}>
         <UploadCloud size={48} color="#3b82f6" />
         <p>Drag and drop CSV here or click to browse</p>
