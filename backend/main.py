@@ -576,6 +576,32 @@ def retrain_model(current_row_count=None):
              with open(os.path.join(MODEL_DIR, "model_comparison.json"), "w") as f:
                  json.dump(metrics, f, indent=4)
 
+             # --- SNOWFLAKE ACCURACY LOGGING ---
+             print("📊 Logging accuracy to Snowflake...")
+             conn_log = get_snowflake_connection()
+             if conn_log:
+                 try:
+                     cs_log = conn_log.cursor()
+                     cs_log.execute("USE SCHEMA DT_INGESTION")
+                     insert_sql = """
+                     INSERT INTO MODEL_ACCURACY_HISTORY 
+                     (MODEL_NAME, ACCURACY_PCT, MAE, R2, SAMPLE_SIZE)
+                     VALUES (%s, %s, %s, %s, %s)
+                     """
+                     cs_log.execute(insert_sql, (
+                         winner['name'], 
+                         winner['accuracy_pct'], 
+                         winner['mae'], 
+                         winner['r2'], 
+                         len(df)
+                     ))
+                     conn_log.commit()
+                     print("✅ Accuracy logged to Snowflake.")
+                 except Exception as log_e:
+                     print(f"❌ Failed to log accuracy: {log_e}")
+                 finally:
+                     conn_log.close()
+
              print(f"Retraining Complete. Winner: {winner['name']}")
              
     except Exception as e:
@@ -707,31 +733,12 @@ def get_plots():
 
 @app.get("/active")
 def get_active_shipments():
-    """Returns top 100 'Latest' shipments for the tracking dashboard."""
+    """Returns shipments from Snowflake for the tracking dashboard."""
     try:
-        # If history exists
-        if history_df is not None and not history_df.empty:
-            # Take a random sample to simulate "Live" view
-            sample = history_df.sample(n=min(100, len(history_df))).to_dict('records')
-            response = []
-            statuses = ['In Transit', 'Customs Clearance', 'Arrived at Hub', 'Out for Delivery']
-            
-            for row in sample:
-                # Generate a status
-                stat = statuses[np.random.randint(0, len(statuses))]
-                response.append({
-                    "id": row.get('Transport_Vehicle_ID', 'N/A'), # Using the rich ID
-                    "origin": row.get('PolCode', 'UNK'),
-                    "destination": row.get('PodCode', 'UNK'),
-                    "mode": row.get('ModeOfTransport', 'UNK'),
-                    "via": row.get('via_port', 'DIRECT'), # NEW
-                    "status": stat,
-                    "eta": f"{round(row.get('Actual_Duration_Hours', 0), 1)}h"
-                })
-            return response
-        return []
+        loader = DataLoader()
+        return loader.get_active_trips(limit=100)
     except Exception as e:
-        print(f"Error fetching active: {e}")
+        print(f"Error fetching active shipments: {e}")
         return []
 
 def prepare_input(df):
