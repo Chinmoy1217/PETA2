@@ -3,7 +3,7 @@ import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area, PieChart, Pie
 } from 'recharts';
-import { LayoutDashboard, UploadCloud, Calculator, Activity, Ship, CheckCircle, TrendingUp, AlertTriangle, Download, Menu, X, MessageSquare, Bell, Truck, LogOut, Lock } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, Calculator, Activity, Ship, CheckCircle, TrendingUp, AlertTriangle, Download, Menu, X, MessageSquare, Bell } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -23,7 +23,6 @@ function App() {
   const [metrics, setMetrics] = useState(null);
   const [plots, setPlots] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [theme, setTheme] = useState('dark');
   const API_URL = "http://127.0.0.1:8000";
 
   useEffect(() => {
@@ -254,168 +253,8 @@ function SummaryView({ metrics }) {
       </div>
     </div >
   );
-        />
-      </div >
-
-      <div style={{
-        background: 'rgba(255, 255, 255, 0.25)',
-        backdropFilter: 'blur(4px)',
-        padding: '0.5rem 1.5rem',
-        borderRadius: '999px',
-        display: 'inline-block',
-        fontSize: '0.9rem',
-        fontWeight: 'bold',
-        letterSpacing: '1px',
-        marginBottom: '0.75rem',
-        color: '#475569'
-      }}>
-        KEY FIGURES
-      </div>
-
-      <h1 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '2rem', color: '#0f172a' }}>
-        Data at the core of our platform
-      </h1>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '1.5rem',
-        width: '100%'
-      }}>
-        {/* Metric 1 */}
-        <div style={{ padding: '0 1rem' }}>
-          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
-            +{fmt(metrics.total_shipments || 0)}
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
-            transport data
-          </div>
-          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
-            Derived from real, anonymized, continuously updated flows for optimal representativeness
-          </p>
-        </div>
-
-        {/* Metric 2 */}
-        <div style={{ padding: '0 1rem' }}>
-          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
-            +{metrics.connected_carriers_count || 50}
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
-            connected carriers
-          </div>
-          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
-            A network of major global carriers and regional shippers ready to meet your needs
-          </p>
-        </div>
-
-        {/* Metric 3 */}
-        <div style={{ padding: '0 1rem' }}>
-          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
-            +{metrics.delayed_rate || 0}%
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
-            average deviation detected
-          </div>
-          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
-            Identify optimization opportunities and regain control over your costs and lead times
-          </p>
-        </div>
-      </div>
-
-  {/* Explanation Section */ }
-  <div style={{
-    marginTop: '2rem',
-    textAlign: 'left',
-    width: '100%',
-    animation: 'fadeInUp 0.6s ease-out 0.3s backwards'
-  }}>
-    <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1e293b', marginBottom: '1rem', borderBottom: '2px solid rgba(0,0,0,0.1)', paddingBottom: '0.5rem' }}>
-      How Insights Are Calculated
-    </h3>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-      <div>
-        <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
-          <TrendingUp size={16} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
-          Historical Analysis
-        </h4>
-        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6' }}>
-          We analyze over {metrics.total_shipments ? (metrics.total_shipments / 1000).toFixed(0) + 'K' : '600K'} historical shipment records to establish baseline performance patterns for every route, carrier, and mode of transport.
-        </p>
-      </div>
-      <div>
-        <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
-          <Calculator size={16} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
-          Live Deviation Tracking
-        </h4>
-        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6' }}>
-          Our XGBoost v1.0 Model continuously compares live ETA updates against our predictive baseline. The "Average Deviation" KPIs reflect the real-time gap between carrier promises and actual performance.
-        </p>
-      </div>
-    </div>
-  </div>
-    </div >
-  );
 }
 
-
-function SignupModal({ onClose, API_URL }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [msg, setMsg] = useState(null);
-  const [error, setError] = useState(null);
-
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    if (password !== confirm) {
-      setError("Passwords do not match");
-      return;
-    }
-    setError(null);
-    try {
-      const res = await fetch(`${API_URL}/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) {
-        setMsg("Account created! Please login.");
-        setTimeout(() => onClose(), 2000); // Close after success
-      } else {
-        setError("Registration failed.");
-      }
-    } catch (err) {
-      setError("Service unavailable.");
-    }
-  };
-
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="glass-card" style={{ width: '350px', padding: '2rem', background: '#1e293b', border: '1px solid #3b82f6' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ margin: 0, color: '#fff' }}>Sign Up</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.5rem' }}>&times;</button>
-        </div>
-
-        {msg ? <div style={{ color: '#10b981', textAlign: 'center', padding: '2rem 0' }}>{msg}</div> : (
-          <form onSubmit={handleSignup}>
-            <div style={{ marginBottom: '1rem' }}>
-              <input type="text" placeholder="Choose Username" value={username} onChange={e => setUsername(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
-            </div>
-            {error && <div style={{ color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
-            <button type="submit" className="action-btn" style={{ width: '100%' }}>Register</button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function DashboardView({ metrics, plots }) {
   const [comparison, setComparison] = useState([]);
@@ -432,29 +271,29 @@ function DashboardView({ metrics, plots }) {
       <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', fontSize: '0.9rem' }}>Core Performance</h3>
       <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>üì¶</span> Total Shipments</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>=ÉÙ™</span> Total Shipments</div>
           <div className="stat-value">{metrics.total_shipments?.toLocaleString()}</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>‚úÖ</span> On-Time Delivery %</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>G£‡</span> On-Time Delivery %</div>
           <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_rate}%</div>
           <div className="sub-text">ETA Accuracy</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>üïí</span> Late Shipments</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>=ÉÚ∆</span> Late Shipments</div>
           <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.late_shipments_count?.toLocaleString()}</div>
           <div className="sub-text">{metrics.delayed_rate}% of Total</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>‚è≥</span> Avg Delay</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>G≈¶</span> Avg Delay</div>
           <div className="stat-value" style={{ color: '#f59e0b' }}>{metrics.avg_delay_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>üö®</span> Max Delay</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>=É‹ø</span> Max Delay</div>
           <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.max_delay_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>‚ö†Ô∏è</span> Critical Delays</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>G‹·n+≈</span> Critical Delays</div>
           <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics.critical_delays_count}</div>
           <div className="sub-text">&gt; 3 Days</div>
         </div>
@@ -464,15 +303,15 @@ function DashboardView({ metrics, plots }) {
       <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', marginTop: '0.8rem', fontSize: '0.9rem' }}>ETA Variance</h3>
       <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>üîÑ</span> Avg Variance</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>=Éˆ‰</span> Avg Variance</div>
           <div className="stat-value">{metrics.avg_eta_variance_days} days</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>üöÄ</span> Early Arrivals</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>=É‹«</span> Early Arrivals</div>
           <div className="stat-value" style={{ color: '#3b82f6' }}>{metrics.early_arrival_rate}%</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>üéØ</span> On-Time Arrivals</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>=Éƒª</span> On-Time Arrivals</div>
           <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_arrival_rate}%</div>
         </div>
       </div>
@@ -1017,59 +856,28 @@ function UploadView({ API_URL }) {
   };
 
   return (
-    <div className="glass-card">
-      <div className="upload-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+    <div className="glass-card batch-container">
+      <div className="upload-area" style={{ textAlign: 'center', padding: '2rem', border: '2px dashed #94a3b8', borderRadius: '1rem', marginBottom: '2rem' }}>
+        <UploadCloud size={48} color="#3b82f6" />
+        <p>Drag and drop CSV here or click to browse</p>
+        <input type="file" onChange={e => setFile(e.target.files[0])} style={{ display: 'none' }} id="file-upload" />
+        <label htmlFor="file-upload" className="action-btn" style={{ width: '200px', margin: '1rem auto' }}>Browse Files</label>
+        {file && <p style={{ color: '#10b981' }}>Selected: {file.name}</p>}
 
-        {/* File Upload Area */}
-        <div className="upload-area" style={{ textAlign: 'center', padding: '2rem', border: '2px dashed #94a3b8', borderRadius: '1rem', gridColumn: 'span 3' }}>
-          <UploadCloud size={48} color="#3b82f6" />
-          <h3 style={{ margin: '1rem 0 0.5rem' }}>Upload Data File</h3>
-          <p style={{ color: '#94a3b8', marginBottom: '1.5rem' }}>
-            Supported formats: <strong>CSV, Text (.txt), Parquet</strong>
-            <br />
-            <span style={{ fontSize: '0.9em', color: '#ef4444' }}>(XML and JSON are NOT supported)</span>
-          </p>
-
-          <input type="file" onChange={e => setFile(e.target.files[0])} style={{ display: 'none' }} id="file-upload" accept=".csv,.txt,.parquet" />
-          <label htmlFor="file-upload" className="action-btn" style={{ width: '200px', margin: '0 auto', display: 'inline-block' }}>Browse Files</label>
-
-          {file && <p style={{ color: '#10b981', marginTop: '1rem' }}>Selected: {file.name}</p>}
-
-          <div style={{ margin: '1.5rem 0 1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
-            <input
-              type="checkbox"
-              checked={learn}
-              onChange={e => setLearn(e.target.checked)}
-              id="learn-toggle"
-              style={{ width: 'auto' }}
-            />
-            <label htmlFor="learn-toggle" style={{ margin: 0, color: '#e2e8f0', cursor: 'pointer' }}>
-              Teach model with this data (Continuous Learning)
-            </label>
-          </div>
-
-          {file && <button className="action-btn" onClick={handleUpload}>Process File</button>}
+        <div style={{ margin: '1rem 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+          <input
+            type="checkbox"
+            checked={learn}
+            onChange={e => setLearn(e.target.checked)}
+            id="learn-toggle"
+            style={{ width: 'auto' }}
+          />
+          <label htmlFor="learn-toggle" style={{ margin: 0, color: '#e2e8f0', cursor: 'pointer' }}>
+            Teach model with this data (Continuous Learning)
+          </label>
         </div>
 
-        {/* Database Upload Option */}
-        <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ marginBottom: '1rem' }}><i className="fas fa-database"></i> {/* Placeholder icon if fontawesome not avail, using lucide below */}
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-          </div>
-          <h4>Upload from DB Server</h4>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Connect to SQL/NoSQL databases</p>
-          <button className="sm-btn" style={{ marginTop: '1rem', width: '100%' }}>Connect</button>
-        </div>
-
-        {/* API Fetch Option */}
-        <div className="action-card" style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem', textAlign: 'center', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ marginBottom: '1rem' }}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"></path></svg>
-          </div>
-          <h4>Fetch Data from API</h4>
-          <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Ingest from REST/GraphQL</p>
-          <button className="sm-btn" style={{ marginTop: '1rem', width: '100%' }}>Configure</button>
-        </div>
+        {file && <button className="action-btn" onClick={handleUpload}>Process File</button>}
       </div>
 
       {prediction && (
