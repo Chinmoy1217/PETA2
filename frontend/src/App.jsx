@@ -26,7 +26,8 @@ function App() {
   const [plots, setPlots] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [theme, setTheme] = useState('dark');
-  const API_URL = "http://127.0.0.1:8000";
+  // Dynamic API URL - works locally AND on network
+  const API_URL = `http://${window.location.hostname}:8000`;
 
   useEffect(() => {
     fetch(`${API_URL}/metrics`).then(res => res.json()).then(setMetrics);
@@ -271,7 +272,8 @@ function DashboardView({ metrics, plots }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/comparison")
+    const apiUrl = `http://${window.location.hostname}:8000`;
+    fetch(`${apiUrl}/comparison`)
       .then(res => res.json())
       .then(data => {
         // Transform object format to array format if needed

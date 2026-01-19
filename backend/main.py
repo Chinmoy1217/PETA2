@@ -142,70 +142,76 @@ def load_artifacts():
     port_coords = {}
     feature_store = {}
     
+    # 1. XGBoost / Strategy
     try:
-        print("Loading XGBoost...")
-        print("Loading XGBoost...")
         xg_path = os.path.join(MODEL_DIR, "eta_xgboost.json")
-        try:
+        if os.path.exists(xg_path):
             with open(xg_path, 'r') as f:
-                 content = f.read().strip()
-            
+                content = f.read().strip()
             if content in ['USE_RF', 'USE_ENSEMBLE']:
-                bst = content # Marker
-                print(f"Model Strategy: {content}")
+                bst = content
             else:
-                 bst = xgb.Booster()
-                 bst.load_model(xg_path)
-        except Exception:
-             print("Defaulting XGBoost to None (Load Failed)")
-             bst = None
+                bst = xgb.Booster()
+                bst.load_model(xg_path)
+    except Exception as e:
+        print(f"XGBoost Load Failed: {e}")
 
-        print("Loading Sklearn Models...")
-        try:
-            with open(os.path.join(MODEL_DIR, "linear_regression.pkl"), "rb") as f:
+    # 2. Sklearn Models
+    try:
+        lr_path = os.path.join(MODEL_DIR, "linear_regression.pkl")
+        rf_path = os.path.join(MODEL_DIR, "random_forest.pkl")
+        if os.path.exists(lr_path):
+            with open(lr_path, "rb") as f:
                 lr_model = pickle.load(f)
-            with open(os.path.join(MODEL_DIR, "random_forest.pkl"), "rb") as f:
+        if os.path.exists(rf_path):
+            with open(rf_path, "rb") as f:
                 rf_model = pickle.load(f)
-        except FileNotFoundError:
-            print("Warning: Sklearn models not found. Using XGBoost only.")
-        
-        with open(os.path.join(MODEL_DIR, "encoders.json"), "r") as f:
-            encoders = json.load(f)
-            
-        with open(os.path.join(MODEL_DIR, "mode_stats.json"), "r") as f:
-            mode_stats = json.load(f)
-            
-        with open(os.path.join(MODEL_DIR, "model_comparison.json"), "r") as f:
-            comps = json.load(f)
-            model_metrics = {item['name']: item['accuracy'] for item in comps}
-            
-        print("Loading Historical Data via DataLoader...")
-        try:
-            loader = DataLoader()
-            history_df = loader.get_training_view()
-        except Exception as e:
-            print(f"Warning: DataLoader failed: {e}. Using fallback data.")
-            history_df = pd.DataFrame()  # Empty dataframe as fallback
+    except Exception as e:
+        print(f"Sklearn Load Failed: {e}")
 
-        print("Loading Geospatial Data...")
-        with open(os.path.join(MODEL_DIR, "port_coordinates.json"), "r") as f:
+    # 3. JSON Artifacts (Encoders, Stats, Ports)
+    def load_json(filename, default):
+        path = os.path.join(MODEL_DIR, filename)
+        if os.path.exists(path):
             try:
-                port_coords = json.load(f)
-            except:
-                port_coords = {} 
-        
-        print("Loading Feature Store (Intelligent Artifacts)...")
-        fs_path = "../feature_store.pkl" # In root
+                with open(path, "r") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Failed to parse {filename}: {e}")
+        return default
+
+    encoders = load_json("encoders.json", {})
+    mode_stats = load_json("mode_stats.json", {})
+    port_coords = load_json("port_coordinates.json", {})
+    
+    try:
+        comps = load_json("model_comparison.json", [])
+        if isinstance(comps, list):
+            model_metrics = {item['name']: item['accuracy'] for item in comps if 'name' in item}
+        elif isinstance(comps, dict):
+             # Handle alternate format
+             model_metrics = {k: v.get('accuracy_pct', 0) for k, v in comps.items()}
+    except Exception as e:
+        print(f"Metrics Load Failed: {e}")
+
+    # 4. Historical Data
+    try:
+        loader = DataLoader()
+        history_df = loader.get_training_view()
+    except Exception as e:
+        print(f"DataLoader failed: {e}")
+        history_df = pd.DataFrame()
+
+    # 5. Feature Store
+    try:
+        fs_path = "../feature_store.pkl"
         if os.path.exists(fs_path):
             with open(fs_path, "rb") as f:
                 feature_store = pickle.load(f)
-        else:
-            print("Feature Store not found. Advanced features will be disabled.")
-            feature_store = {}
-
-        print("All Models & Artifacts Loaded Successfully.")
     except Exception as e:
-        print(f"Warning: Load failed. Error: {e}")
+        print(f"Feature Store Load Failed: {e}")
+
+    print(f"All Models & Artifacts Loaded. Ports found: {len(port_coords)}")
 
 load_artifacts()
 
@@ -424,7 +430,6 @@ def get_locations():
     """Returns list of all available Port/City codes"""
     return sorted(list(port_coords.keys()))
 
-@app.get("/metrics")
 @app.get("/metrics")
 def get_metrics():
     try:
