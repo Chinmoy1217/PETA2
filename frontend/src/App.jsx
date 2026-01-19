@@ -50,6 +50,11 @@ function App() {
     }
   };
 
+  // Authentication Gate
+  if (!isAuthenticated) {
+    return <LoginView onLogin={setIsAuthenticated} API_URL={API_URL} />;
+  }
+
   return (
     <div className="app-container">
       {/* Top Menu Bar */}
@@ -263,9 +268,28 @@ function SummaryView({ metrics }) {
 
 function DashboardView({ metrics, plots }) {
   const [comparison, setComparison] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/comparison").then(res => res.json()).then(setComparison);
+    fetch("http://127.0.0.1:8000/comparison")
+      .then(res => res.json())
+      .then(data => {
+        // Transform object format to array format if needed
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          const comparisonArray = Object.entries(data).map(([name, values]) => ({
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            accuracy: values.accuracy_pct || 0
+          }));
+          setComparison(comparisonArray);
+        } else if (Array.isArray(data)) {
+          setComparison(data);
+        }
+      })
+      .catch(err => {
+        console.error("Failed to load comparison data:", err);
+        setError(err.message);
+        setComparison([]); // Set empty array as fallback
+      });
   }, []);
 
   if (!metrics) return <div style={{ padding: '2rem' }}>Loading Analytic Engine...</div>;

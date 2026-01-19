@@ -10,7 +10,37 @@ import pickle
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
 
-app = FastAPI()
+
+app = FastAPI(
+    title="ETA Insight API",
+    description="""
+    ## Next-Gen Logistics Intelligence Platform
+    
+    This API provides predictive ETA (Estimated Time of Arrival) calculations, 
+    real-time shipment tracking, and comprehensive analytics for logistics operations.
+    
+    ### Key Features:
+    * **Authentication**: Secure login/signup with Snowflake integration
+    * **Predictive Analytics**: XGBoost-powered ETA predictions
+    * **Real-Time Tracking**: Active shipment monitoring
+    * **Batch Processing**: Upload CSV/Parquet files for bulk predictions
+    * **Analytics Dashboard**: Performance metrics and model comparisons
+    
+    ### Snowflake Integration:
+    * Connected to 949,227+ shipment records
+    * Live data from `FACT_TRIP` table
+    * Model accuracy tracking in `MODEL_ACCURACY_HISTORY`
+    """,
+    version="1.0.0",
+    terms_of_service="https://cozentus.com/terms",
+    contact={
+        "name": "Cozentus Support",
+        "email": "support@cozentus.com",
+    },
+    license_info={
+        "name": "Proprietary",
+    },
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,9 +50,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL_DIR = "../model"
+MODEL_DIR = "./model"
 DATA_PATH = "../../Master_Training_Data_Augmented.csv" # Pointing to Hackthon/ root
-from data_loader import DataLoader
+from backend.data_loader import DataLoader
+from backend.risk_model import RiskModel
+from backend.reliability_model import ReliabilityModel
 
 # Global Models Init
 risk_model = RiskModel(MODEL_DIR)
@@ -38,6 +70,15 @@ model_metrics = {}
 history_df = None
 port_coords = {}
 feature_store = {}
+
+# Pydantic Models for Authentication
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
 
 # Snowflake Connection Helper (Native)
 def get_snowflake_connection():
@@ -819,8 +860,6 @@ def simulate_trip(req: SimulationRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-<<<<<<< HEAD
-=======
 
 # --- TRACKING & RICH DATA ENDPOINTS ---
 def convert_units(mode, distance_km, speed_kmh):
@@ -1038,7 +1077,6 @@ async def trigger_ingestion(req: IngestRequest, background_tasks: BackgroundTask
 # DEPRECATED INGEST ENDPOINT - KEPT FOR COMPATIBILITY
 
 
->>>>>>> 602f94cd7ad9882d7fee25dcbb419e1514203243
 @app.post("/predict")
 async def predict_eta(
     background_tasks: BackgroundTasks,
@@ -1152,10 +1190,6 @@ async def predict_eta(
             # Handle unknown keys (0)
             encoded_df[col] = encoded_df[col].astype(str).map(lambda s: mapping.get(s, 0))
             
-<<<<<<< HEAD
-        dmat = xgb.DMatrix(encoded_df[['PolCode', 'PodCode', 'ModeOfTransport', 'Route']])
-        preds = np.expm1(bst.predict(dmat))
-=======
         # 1. Prediction: XGBoost / Strategy
         pred_xgb = 0
         try:
@@ -1190,7 +1224,6 @@ async def predict_eta(
              preds = np.expm1(bst.predict(dmat))
         else:
              preds = np.expm1(rf_model.predict(encoded_df[FEATURES]))
->>>>>>> 602f94cd7ad9882d7fee25dcbb419e1514203243
         
         # Format Results for Single Simulation vs Batch
         results = []

@@ -1,0 +1,7 @@
+// This snippet should be inserted at line 51-52 in App.jsx
+// After the getTitle function and before the return statement
+
+  // Authentication Gate
+  if (!isAuthenticated) {
+    return <LoginView onLogin={setIsAuthenticated} API_URL={API_URL} />;
+  }
