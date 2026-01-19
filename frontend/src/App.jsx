@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, LineChart, Line, AreaChart, Area
+  ScatterChart, Scatter, LineChart, Line, AreaChart, Area, PieChart, Pie
 } from 'recharts';
 import { LayoutDashboard, UploadCloud, Calculator, Activity, Truck, CheckCircle, TrendingUp, AlertTriangle, Download, LogOut, Lock } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
@@ -306,31 +306,145 @@ function DashboardView({ metrics, plots }) {
 
   return (
     <>
-      <div className="card-grid">
+      {/* 1. CORE KPIs */}
+      <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', fontSize: '0.9rem' }}>Core Performance</h3>
+      <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
         <div className="glass-card">
-          <div className="stat-header">Best Accuracy</div>
-          <div className="stat-value" style={{ color: '#10b981' }}>{metrics.accuracy}%</div>
-          <div className="sub-text">{metrics.name}</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>📦</span> Total Shipments</div>
+          <div className="stat-value">{metrics.total_shipments?.toLocaleString()}</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Avg Error (RMSE)</div>
-          <div className="stat-value">{metrics.rmse}h</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>✅</span> On-Time Delivery %</div>
+          <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_rate}%</div>
+          <div className="sub-text">ETA Accuracy</div>
         </div>
         <div className="glass-card">
-          <div className="stat-header">Total Shipments</div>
-          <div className="stat-value">600k+</div>
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🕒</span> Late Shipments</div>
+          <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.late_shipments_count?.toLocaleString()}</div>
+          <div className="sub-text">{metrics.delayed_rate}% of Total</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>⏳</span> Avg Delay</div>
+          <div className="stat-value" style={{ color: '#f59e0b' }}>{metrics.avg_delay_days} days</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🚨</span> Max Delay</div>
+          <div className="stat-value" style={{ color: '#ef4444' }}>{metrics.max_delay_days} days</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>⚠️</span> Critical Delays</div>
+          <div className="stat-value" style={{ color: '#b91c1c' }}>{metrics.critical_delays_count}</div>
+          <div className="sub-text">&gt; 3 Days</div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+      {/* 2. VARIANCE KPIs */}
+      <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginBottom: '0.8rem', marginTop: '0.8rem', fontSize: '0.9rem' }}>ETA Variance</h3>
+      <div className="card-grid" style={{ marginBottom: '1rem', gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="glass-card">
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🔄</span> Avg Variance</div>
+          <div className="stat-value">{metrics.avg_eta_variance_days} days</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🚀</span> Early Arrivals</div>
+          <div className="stat-value" style={{ color: '#3b82f6' }}>{metrics.early_arrival_rate}%</div>
+        </div>
+        <div className="glass-card">
+          <div className="stat-header"><span style={{ fontSize: '1.4rem', marginRight: '8px' }}>🎯</span> On-Time Arrivals</div>
+          <div className="stat-value" style={{ color: '#10b981' }}>{metrics.on_time_arrival_rate}%</div>
+        </div>
+      </div>
+
+      {/* 3. OPERATIONAL KPIs (Charts) */}
+      <h3 style={{ color: '#0f172a', fontWeight: 'bold', borderBottom: '1px solid #334155', paddingBottom: '0.3rem', marginTop: '0.8rem', marginBottom: '0.8rem', fontSize: '0.9rem' }}>Operational Accuracy</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.8rem', marginBottom: '1rem' }}>
+
+        {/* Mode Accuracy */}
+        {/* Mode Accuracy - Donut Chart */}
+        <div className="glass-card chart-container">
+          <div className="stat-header">By Transport Mode (Donut)</div>
+          <ResponsiveContainer width="100%" height={150}>
+            <PieChart>
+              <Pie
+                data={metrics.mode_accuracy || []}
+                cx="50%"
+                cy="50%"
+                innerRadius={40}
+                outerRadius={60}
+                dataKey="value"
+                nameKey="name"
+                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+              >
+                {(metrics.mode_accuracy || []).map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444'][index % 4]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Carrier Accuracy */}
+        <div className="glass-card chart-container">
+          <div className="stat-header">By Carrier</div>
+          <ResponsiveContainer width="100%" height={150}>
+            <PieChart>
+              <Pie
+                data={metrics.carrier_accuracy || []}
+                cx="50%"
+                cy="50%"
+                innerRadius={30}
+                outerRadius={50}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {(metrics.carrier_accuracy || []).map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'][index % 5]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Route Accuracy */}
+        <div className="glass-card chart-container">
+          <div className="stat-header">By Route</div>
+          <ResponsiveContainer width="100%" height={150}>
+            <BarChart data={metrics.route_accuracy || []} layout="vertical">
+              <XAxis type="number" domain={[80, 100]} hide />
+              <YAxis dataKey="name" type="category" stroke="#94a3b8" width={80} style={{ fontSize: '0.8rem' }} />
+              <Tooltip
+                cursor={{ fill: 'transparent' }}
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
+              <Bar dataKey="value" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={20} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Legacy Charts & Scatter */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '1rem' }}>
         <div className="glass-card chart-container">
           <div className="stat-header">Model Battle (Accuracy %)</div>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={180}>
             <BarChart data={comparison} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
               <XAxis type="number" domain={[0, 100]} stroke="#94a3b8" />
               <YAxis dataKey="name" type="category" stroke="#94a3b8" width={100} />
-              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6' }} />
+              <Tooltip
+                cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
               <Bar dataKey="accuracy" radius={[0, 4, 4, 0]}>
                 {comparison.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={
@@ -346,12 +460,15 @@ function DashboardView({ metrics, plots }) {
 
         <div className="glass-card chart-container">
           <div className="stat-header">Mode-Specific Performance</div>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={180}>
             <BarChart data={plots?.mode_performance || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
               <XAxis dataKey="mode" stroke="#94a3b8" />
               <YAxis stroke="#94a3b8" domain={[60, 100]} />
-              <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6' }} />
+              <Tooltip
+                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                itemStyle={{ color: '#fff' }}
+              />
               <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
                 {plots?.mode_performance?.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={
@@ -366,18 +483,22 @@ function DashboardView({ metrics, plots }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
         <div className="glass-card chart-container">
           <div className="stat-header">Variance Map (Predicted vs Actual)</div>
           {!plots?.scatter_data ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Loading Data...</div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={180}>
               <ScatterChart key={plots.scatter_data.length}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis type="number" dataKey="Actual" name="Actual" stroke="#94a3b8" unit="h" />
                 <YAxis type="number" dataKey="Pred" name="Predicted" stroke="#94a3b8" unit="h" />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6' }} />
+                <Tooltip
+                  cursor={{ strokeDasharray: '3 3' }}
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#3b82f6', borderRadius: '8px' }}
+                  itemStyle={{ color: '#fff' }}
+                />
                 <Scatter name="Shipments" data={plots.scatter_data} fill="#3b82f6" />
               </ScatterChart>
             </ResponsiveContainer>
@@ -389,7 +510,7 @@ function DashboardView({ metrics, plots }) {
           {!plots?.timeline_data ? (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Loading Data...</div>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={180}>
               <AreaChart key={plots.timeline_data.length} data={plots.timeline_data}>
                 <defs>
                   <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
@@ -400,7 +521,10 @@ function DashboardView({ metrics, plots }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
                 <XAxis dataKey="date" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
-                <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#10b981' }} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#10b981', borderRadius: '8px' }}
+                  itemStyle={{ color: '#fff' }}
+                />
                 <Area type="monotone" dataKey="count" stroke="#10b981" fillOpacity={1} fill="url(#colorCount)" />
               </AreaChart>
             </ResponsiveContainer>
