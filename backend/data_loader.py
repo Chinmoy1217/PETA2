@@ -1,14 +1,13 @@
 import pandas as pd
-import os
-import snowflake.connector
+import numpy as np
+from datetime import datetime, timedelta
 
 # Snowflake Config
 USER = "HACKATHON_DT"
-# Loaded from environment variable for security
-PASSWORD = os.getenv("SNOWFLAKE_PASSWORD")
+PASSWORD = "eyJraWQiOiIxOTMxNTY4MzQxMDAzOTM3OCIsImFsZyI6IkVTMjU2In0.eyJwIjoiMjk0NzMzOTQwNDEzOjI5NDczMzk0MjUzMyIsImlzcyI6IlNGOjIwMTciLCJleHAiOjE3NzEyMjY3MTF9.O0OTFEyQPIqpdCsNuV881UG1RtQQLBMIyUt-0kfESVYaI0J_u3S4fysE7lee7lWMIMoezOhd2t7gUItdoHC0UA"
 ACCOUNT = "COZENTUS-DATAPRACTICE"
 DATABASE = "HACAKATHON"
-SCHEMA = "DT_INGESTION"
+SCHEMA = "DT_PREP"
 ROLE = "SYSADMIN"
 WAREHOUSE = "COZENTUS_WH"
 
@@ -21,65 +20,69 @@ class DataLoader:
         self.ext_conditions = None
         self.load_data()
 
-    def get_snowflake_conn(self):
-        return snowflake.connector.connect(
-            user=USER,
-            password=PASSWORD,
-            account=ACCOUNT,
-            warehouse=WAREHOUSE,
-            database=DATABASE,
-            schema=SCHEMA,
-            role=ROLE
-        )
-
     def load_data(self):
-        """Loads all 5 Tables from SNOWFLAKE"""
-        print("DataLoader: Connecting to Snowflake...")
-        try:
-            conn = self.get_snowflake_conn()
+        """Generates Synthetic Data for Testing"""
+        print("DataLoader: GENERATING MOCK DATA (No Database Connection)...")
+        
+        # 1. Mock LANES
+        self.lanes = pd.DataFrame([
+            {'LID': 'L001', 'POL': 'USLAX', 'POD': 'CNSHA', 'Distance': 10500},
+            {'LID': 'L002', 'POL': 'NLROT', 'POD': 'USNYC', 'Distance': 6000},
+            {'LID': 'L003', 'POL': 'SGSIN', 'POD': 'AEDXB', 'Distance': 3500},
+            {'LID': 'L004', 'POL': 'CNHKG', 'POD': 'USLAX', 'Distance': 11000},
+        ])
+
+        # 2. Mock CARRIERS
+        self.carriers = pd.DataFrame([
+            {'CID': 'C001', 'CNm': 'Maersk Line', 'Reliability': 0.95},
+            {'CID': 'C002', 'CNm': 'MSC', 'Reliability': 0.92},
+            {'CID': 'C003', 'CNm': 'CMA CGM', 'Reliability': 0.88},
+            {'CID': 'C004', 'CNm': 'FedEx Air', 'Reliability': 0.99},
+        ])
+
+        # 3. Mock VEHICLES
+        self.vehicles = pd.DataFrame([
+            {'VID': 'V001', 'VNm': 'Maersk Mc-Kinney', 'VType': 'Ocean'},
+            {'VID': 'V002', 'VNm': 'MSC Gulsub', 'VType': 'Ocean'},
+            {'VID': 'V003', 'VNm': 'Boeing 777F', 'VType': 'Air'},
+            {'VID': 'V004', 'VNm': 'Volvo FH16', 'VType': 'Truck'},
+        ])
+
+        # 4. Mock EXT CONDITIONS
+        self.ext_conditions = pd.DataFrame([
+            {'LID': 'L001', 'Factors': 'Congestion', 'Severity_Score': 40},
+            {'LID': 'L002', 'Factors': 'Storm', 'Severity_Score': 60},
+        ])
+
+        # 5. Mock TRIPS
+        num_trips = 100
+        trips = []
+        for i in range(num_trips):
+            # Random selections
+            lane = self.lanes.sample(1).iloc[0]
+            carrier = self.carriers.sample(1).iloc[0]
+            vehicle = self.vehicles.sample(1).iloc[0]
             
-            # 1. LANE
-            print("Fetching DIM_LANE...")
-            self.lanes = pd.read_sql("SELECT * FROM DIM_LANE", conn)
-            # Snowflake returns uppercase columns, map to internal expected names
-            self.lanes.rename(columns={'LID': 'LID', 'POL': 'POL', 'POD': 'POD'}, inplace=True) 
-
-            # 2. CARRIER
-            print("Fetching DIM_CARRIER...")
-            self.carriers = pd.read_sql("SELECT * FROM DIM_CARRIER", conn)
-            self.carriers.rename(columns={'CNM': 'CNm'}, inplace=True) # Map CNM -> CNm
-
-            # 3. VEHICLE
-            print("Fetching DIM_VEHICLE...")
-            self.vehicles = pd.read_sql("SELECT * FROM DIM_VEHICLE", conn)
-            self.vehicles.rename(columns={'VNM': 'VNm', 'VTYPE': 'VType'}, inplace=True)
-
-            # 4. EXT_CONDITIONS
-            print("Fetching FACT_EXT_CONDITIONS...")
-            self.ext_conditions = pd.read_sql("SELECT * FROM FACT_EXT_CONDITIONS", conn)
-            self.ext_conditions.rename(columns={'FACTORS': 'Factors', 'SEVERITY_SCORE': 'Severity_Score'}, inplace=True)
-
-            # 5. TRIP (Calculated Fields)
-            print("Fetching FACT_TRIP...")
-            # We need Actual_Duration_Hours for training
-            query = """
-            SELECT 
-                *, 
-                DATEDIFF(hour, ATD, ATA) as "Actual_Duration_Hours" 
-            FROM FACT_TRIP
-            WHERE ATD IS NOT NULL AND ATA IS NOT NULL
-            """
-            self.trips = pd.read_sql(query, conn)
-            # Map LID -> LIN to match internal join logic
-            self.trips.rename(columns={'LID': 'LIN'}, inplace=True)
-
-            conn.close()
-            print(f"DataLoader: Loaded {len(self.trips)} trips from Snowflake.")
+            # Dates
+            atd = datetime.now() - timedelta(days=np.random.randint(1, 30))
+            duration = (lane['Distance'] / 30) + np.random.normal(0, 24) # Rough hours calc
+            if vehicle['VType'] == 'Air': duration = (lane['Distance'] / 800) + np.random.normal(0, 2)
             
-        except Exception as e:
-            print(f"DataLoader Error (Snowflake): {e}")
-            # Fallback or Raise? User said "no more csv use", so we raise/fail.
-            raise e
+            ata = atd + timedelta(hours=duration)
+            
+            trips.append({
+                'TID': f"T{1000+i}",
+                'LIN': lane['LID'],
+                'CID': carrier['CID'],
+                'VID': vehicle['VID'],
+                'Transport_Vehicle_ID': f"{vehicle['VNm']}-{i}",
+                'ATD': atd,
+                'ATA': ata,
+                'Actual_Duration_Hours': duration
+            })
+            
+        self.trips = pd.DataFrame(trips)
+        print(f"DataLoader: Generated {len(self.trips)} mock trips.")
 
     def get_training_view(self):
         """
@@ -102,23 +105,19 @@ class DataLoader:
         df = df.merge(self.vehicles, left_on='VID', right_on='VID', how='left', suffixes=('', '_vehicle'))
         
         # Join Ext Conditions (LIN -> LID)
-        # Note: EXT_CONDITIONS in Snowflake connects via LID
         df = df.merge(self.ext_conditions, left_on='LIN', right_on='LID', how='left', suffixes=('', '_ext'))
         
         # Feature Mapping
         df['PolCode'] = df['POL']
         df['PodCode'] = df['POD']
         df['ModeOfTransport'] = df.get('VType', 'Unknown') 
+        df['External_Risk_Score'] = df.get('Severity_Score', 0).fillna(0) 
         
         return df
 
     def get_trip_details(self, trip_id):
         """Returns full details for a specific Trip ID (for API)"""
         if self.trips is None: return None
-        # Convert to string for comparison if needed, though usually int/str consistency matters
-        # Snowflake IDs might be Numbers/Ints.
-        pass # Optimization: Query snowflake directly for single ID? 
-        # For now, stick to cache
         full_view = self.get_training_view()
         match = full_view[full_view['TID'] == trip_id]
         if not match.empty:
@@ -128,8 +127,5 @@ class DataLoader:
     def get_active_trips(self, limit=100):
         """Returns a list of active trips for the Dashboard"""
         if self.trips is None: self.load_data()
-        
-        # Simple filter for "Active" - example: has ETD but no ATA? 
-        # Or just latest.
         full_view = self.get_training_view()
         return full_view.head(limit).to_dict('records')

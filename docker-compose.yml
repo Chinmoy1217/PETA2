@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  backend:
+    build: .
+    container_name: peta2_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # CRITICAL: Persist the 'learning' (model folder) to host
+      - ./model:/app/model
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    build: ./frontend
+    container_name: peta2_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

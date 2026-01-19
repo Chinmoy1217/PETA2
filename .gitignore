@@ -1,11 +1,13 @@
+venv310/
 __pycache__/
-*.pyc
-.env
-.DS_Store
-*.model
-*.joblib
+*.pkl
 *.json
 *.pkl
 # Ignore all data files in case some are re-added
 *.csv
 *.xlsx
+
+backend/venv/
+node_modules/
+dist/
+build/
