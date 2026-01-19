@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import LoginView from './LoginView';
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ScatterChart, Scatter, LineChart, Line, AreaChart, Area, PieChart, Pie
@@ -19,7 +20,8 @@ L.Icon.Default.mergeOptions({
 });
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('summary');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [metrics, setMetrics] = useState(null);
   const [plots, setPlots] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -254,168 +256,10 @@ function SummaryView({ metrics }) {
       </div>
     </div >
   );
-        />
-      </div >
 
-      <div style={{
-        background: 'rgba(255, 255, 255, 0.25)',
-        backdropFilter: 'blur(4px)',
-        padding: '0.5rem 1.5rem',
-        borderRadius: '999px',
-        display: 'inline-block',
-        fontSize: '0.9rem',
-        fontWeight: 'bold',
-        letterSpacing: '1px',
-        marginBottom: '0.75rem',
-        color: '#475569'
-      }}>
-        KEY FIGURES
-      </div>
-
-      <h1 style={{ fontSize: '2rem', fontWeight: '800', marginBottom: '2rem', color: '#0f172a' }}>
-        Data at the core of our platform
-      </h1>
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
-        gap: '1.5rem',
-        width: '100%'
-      }}>
-        {/* Metric 1 */}
-        <div style={{ padding: '0 1rem' }}>
-          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
-            +{fmt(metrics.total_shipments || 0)}
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
-            transport data
-          </div>
-          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
-            Derived from real, anonymized, continuously updated flows for optimal representativeness
-          </p>
-        </div>
-
-        {/* Metric 2 */}
-        <div style={{ padding: '0 1rem' }}>
-          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
-            +{metrics.connected_carriers_count || 50}
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
-            connected carriers
-          </div>
-          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
-            A network of major global carriers and regional shippers ready to meet your needs
-          </p>
-        </div>
-
-        {/* Metric 3 */}
-        <div style={{ padding: '0 1rem' }}>
-          <div style={{ fontSize: '4rem', fontWeight: '800', marginBottom: '1rem', color: '#0f172a' }}>
-            +{metrics.delayed_rate || 0}%
-          </div>
-          <div style={{ fontSize: '1.25rem', fontWeight: '600', marginBottom: '1rem' }}>
-            average deviation detected
-          </div>
-          <p style={{ color: '#475569', lineHeight: '1.6', fontSize: '0.95rem' }}>
-            Identify optimization opportunities and regain control over your costs and lead times
-          </p>
-        </div>
-      </div>
-
-  {/* Explanation Section */ }
-  <div style={{
-    marginTop: '2rem',
-    textAlign: 'left',
-    width: '100%',
-    animation: 'fadeInUp 0.6s ease-out 0.3s backwards'
-  }}>
-    <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1e293b', marginBottom: '1rem', borderBottom: '2px solid rgba(0,0,0,0.1)', paddingBottom: '0.5rem' }}>
-      How Insights Are Calculated
-    </h3>
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-      <div>
-        <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
-          <TrendingUp size={16} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
-          Historical Analysis
-        </h4>
-        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6' }}>
-          We analyze over {metrics.total_shipments ? (metrics.total_shipments / 1000).toFixed(0) + 'K' : '600K'} historical shipment records to establish baseline performance patterns for every route, carrier, and mode of transport.
-        </p>
-      </div>
-      <div>
-        <h4 style={{ fontSize: '1.1rem', fontWeight: '600', color: '#334155', marginBottom: '0.5rem' }}>
-          <Calculator size={16} style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
-          Live Deviation Tracking
-        </h4>
-        <p style={{ color: '#64748b', fontSize: '0.9rem', lineHeight: '1.6' }}>
-          Our XGBoost v1.0 Model continuously compares live ETA updates against our predictive baseline. The "Average Deviation" KPIs reflect the real-time gap between carrier promises and actual performance.
-        </p>
-      </div>
-    </div>
-  </div>
-    </div >
-  );
 }
 
 
-function SignupModal({ onClose, API_URL }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [msg, setMsg] = useState(null);
-  const [error, setError] = useState(null);
-
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    if (password !== confirm) {
-      setError("Passwords do not match");
-      return;
-    }
-    setError(null);
-    try {
-      const res = await fetch(`${API_URL}/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      if (res.ok) {
-        setMsg("Account created! Please login.");
-        setTimeout(() => onClose(), 2000); // Close after success
-      } else {
-        setError("Registration failed.");
-      }
-    } catch (err) {
-      setError("Service unavailable.");
-    }
-  };
-
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div className="glass-card" style={{ width: '350px', padding: '2rem', background: '#1e293b', border: '1px solid #3b82f6' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-          <h2 style={{ margin: 0, color: '#fff' }}>Sign Up</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.5rem' }}>&times;</button>
-        </div>
-
-        {msg ? <div style={{ color: '#10b981', textAlign: 'center', padding: '2rem 0' }}>{msg}</div> : (
-          <form onSubmit={handleSignup}>
-            <div style={{ marginBottom: '1rem' }}>
-              <input type="text" placeholder="Choose Username" value={username} onChange={e => setUsername(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '1rem' }}>
-              <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
-            </div>
-            <div style={{ marginBottom: '1.5rem' }}>
-              <input type="password" placeholder="Confirm Password" value={confirm} onChange={e => setConfirm(e.target.value)} className="glass-input" style={{ width: '100%', boxSizing: 'border-box' }} required />
-            </div>
-            {error && <div style={{ color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
-            <button type="submit" className="action-btn" style={{ width: '100%' }}>Register</button>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function DashboardView({ metrics, plots }) {
   const [comparison, setComparison] = useState([]);
