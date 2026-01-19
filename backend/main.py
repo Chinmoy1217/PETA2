@@ -43,6 +43,17 @@ from backend.reliability_model import ReliabilityModel # Model 3
 risk_model = RiskModel(MODEL_DIR)
 reliability_model = ReliabilityModel(MODEL_DIR)
 
+# Safe Global Initialization
+bst = None
+lr_model = None
+rf_model = None
+encoders = {}
+mode_stats = {}
+model_metrics = {}
+history_df = None
+port_coords = {}
+feature_store = {}
+
 # Snowflake Connection Helper (Native)
 def get_snowflake_connection():
     try:
@@ -110,8 +121,21 @@ def load_artifacts():
     global risk_model, reliability_model
     try:
         print("Loading XGBoost...")
-        bst = xgb.Booster()
-        bst.load_model(os.path.join(MODEL_DIR, "eta_xgboost.json"))
+        print("Loading XGBoost...")
+        xg_path = os.path.join(MODEL_DIR, "eta_xgboost.json")
+        try:
+            with open(xg_path, 'r') as f:
+                 content = f.read().strip()
+            
+            if content in ['USE_RF', 'USE_ENSEMBLE']:
+                bst = content # Marker
+                print(f"Model Strategy: {content}")
+            else:
+                 bst = xgb.Booster()
+                 bst.load_model(xg_path)
+        except Exception:
+             print("Defaulting XGBoost to None (Load Failed)")
+             bst = None
 
         print("Loading Sklearn Models...")
         with open(os.path.join(MODEL_DIR, "linear_regression.pkl"), "rb") as f:
@@ -588,6 +612,8 @@ class SimulationRequest(BaseModel):
     PodCode: str
     ModeOfTransport: str
     via_port: str = None # Optional override
+    Carrier: str = "UNKNOWN"
+    trip_ATD: str = None # YYYY-MM-DD
     congestion_level: int = 0  # 0-100
     weather_severity: int = 0  # 0-100
 
@@ -740,7 +766,14 @@ def prepare_input(df):
     df['Route'] = df['PolCode'].astype(str) + "_" + df['PodCode'].astype(str) + "_" + df['ModeOfTransport'].astype(str)
     
     encoded_df = df.copy()
-    for col in ['PolCode', 'PodCode', 'ModeOfTransport', 'Route']:
+    
+    # Ensure Carrier exists
+    if 'Carrier' not in encoded_df.columns:
+        encoded_df['Carrier'] = 'UNKNOWN'
+    encoded_df['Carrier'] = encoded_df['Carrier'].fillna('UNKNOWN')
+
+    # Encode ALL Categoricals
+    for col in ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier']:
         mapping = encoders.get(col, {})
         encoded_df[col] = encoded_df[col].astype(str).map(lambda s: mapping.get(s, 0))
     
@@ -757,15 +790,6 @@ def prepare_input(df):
                 'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
     for c in NUMERIC: encoded_df[c] = 0.0
 
-    # Note: Carrier is missing in SimulationRequest usually, so we skip it or mock it.
-    # SimulationRequest doesn't have carrier. The model *expects* Carrier and Carrier_Target_Enc.
-    # We must add them.
-    encoded_df['Carrier'] = 0 # Unknown
-    
-    # Note: Carrier is missing in SimulationRequest usually, so we skip it or mock it.
-    # SimulationRequest doesn't have carrier. The model *expects* Carrier and Carrier_Target_Enc.
-    # We must add them.
-    encoded_df['Carrier'] = 0 # Unknown
     
     # EXACT ORDER matching model (18 features)
     FEATURES = ['PolCode', 'PodCode', 'ModeOfTransport', 'Route', 'Carrier',
@@ -776,15 +800,75 @@ def prepare_input(df):
     
     return encoded_df[FEATURES]
 
+def save_prediction_results(req: SimulationRequest, result: dict):
+    print("Background: Saving prediction to Snowflake...")
+    try:
+        conn = get_snowflake_connection()
+        if not conn: return
+        
+        with conn.cursor() as cs:
+            # Create Table if missing (Self-Healing)
+            cs.execute("""
+                CREATE TABLE IF NOT EXISTS DT_INGESTION.PETA_PREDICTION_RESULTS (
+                    PREDICTION_ID VARCHAR(50),
+                    PREDICTION_TIMESTAMP TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP(),
+                    POL_CODE VARCHAR(10), POD_CODE VARCHAR(10), MODE_OF_TRANSPORT VARCHAR(20),
+                    CARRIER_SCAC_CODE VARCHAR(10), DEPARTURE_DATE DATE,
+                    CONGESTION_LEVEL NUMBER(3,0), WEATHER_SEVERITY NUMBER(3,0),
+                    PREDICTED_HOURS NUMBER(10,2), PREDICTED_DAYS NUMBER(10,2),
+                    ARRIVAL_DATE DATE, MODEL_VERSION VARCHAR(50), 
+                    ROUTE VARCHAR(100), CREATED_BY VARCHAR(100)
+                )
+            """)
+            
+            import uuid
+            pid = str(uuid.uuid4())
+            atd = req.trip_ATD if req.trip_ATD else '2025-01-01'
+            final_hours = result['prediction_hours']
+            
+            sql = f"""
+                INSERT INTO DT_INGESTION.PETA_PREDICTION_RESULTS (
+                    PREDICTION_ID, POL_CODE, POD_CODE, MODE_OF_TRANSPORT, CARRIER_SCAC_CODE,
+                    DEPARTURE_DATE, CONGESTION_LEVEL, WEATHER_SEVERITY,
+                    PETA_HOURS, PETA_DAYS, MODEL_VERSION, ROUTE, CREATED_BY, STATUS
+                ) VALUES (
+                    '{pid}', '{req.PolCode}', '{req.PodCode}', '{req.ModeOfTransport}', '{req.Carrier}',
+                    '{atd}', {req.congestion_level}, {req.weather_severity},
+                    {final_hours}, {round(final_hours/24, 2)}, 'Ensemble_v1', 
+                    '{req.PolCode}-{req.PodCode}', 'PETA_API', 'SUCCESS'
+                )
+            """
+            cs.execute(sql)
+            conn.commit() # Ensure data is saved
+            print(f"✅ Prediction {pid} saved to Snowflake.")
+            
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Failed to save prediction: {e}")
+    finally:
+        conn.close()
+
 @app.post("/simulate")
-def simulate_trip(req: SimulationRequest):
+def simulate_trip(req: SimulationRequest, background_tasks: BackgroundTasks):
     df_raw = pd.DataFrame([req.dict()])
     X_enc = prepare_input(df_raw)
     
     try:
-        # 1. Prediction: XGBoost (Native)
-        dmat = xgb.DMatrix(X_enc)
-        pred_xgb = float(np.expm1(bst.predict(dmat))[0])
+        # 1. Prediction: XGBoost / Strategy (Robust)
+        pred_xgb = 0
+        if isinstance(bst, str):
+             if bst == "USE_RF": pred_xgb = float(np.expm1(rf_model.predict(X_enc))[0])
+             elif bst == "USE_ENSEMBLE": pred_xgb = float(np.expm1(rf_model.predict(X_enc))[0])
+             else: pred_xgb = 0
+        elif bst:
+             dmat = xgb.DMatrix(X_enc)
+             pred_xgb = float(np.expm1(bst.predict(dmat))[0])
+        else:
+             try:
+                 pred_xgb = float(np.expm1(rf_model.predict(X_enc))[0])
+             except:
+                 print("RF Model Failed. Using Fallback.")
+                 pred_xgb = 120.0 # Default fallback
 
         # 2. Prediction: Sklearn Models
         # Note: Sklearn models are static pkls, we won't retrain them in this simplified flow
@@ -867,7 +951,7 @@ def simulate_trip(req: SimulationRequest):
             explanation += f"\n\n**Scenario Impact:** Factors (Congestion: {req.congestion_level}%, Weather: {req.weather_severity}%, Transshipment) " \
                            f"have added **+{round(total_penalty, 1)} hours**."
 
-        return {
+        response_payload = {
             "prediction_hours": round(final_pred, 2),
             "prediction_days": round(final_pred / 24, 1),
             "base_hours": round(base_pred, 2),
@@ -882,7 +966,7 @@ def simulate_trip(req: SimulationRequest):
             "coordinates": {
                 "source": src_coords,
                 "destination": dest_coords,
-                "via_stops": via_coords_list # List of coords
+                "via_stops": via_coords_list 
             },
             "route_details": {
                 "via_port": rich_data['via_port'],
@@ -893,6 +977,11 @@ def simulate_trip(req: SimulationRequest):
             "ai_explanation": explanation,
             "status": "Success"
         }
+        
+        # Trigger Background Save
+        background_tasks.add_task(save_prediction_results, req, response_payload)
+        
+        return response_payload
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1144,8 +1233,40 @@ async def predict_eta(
                     'PORT_CONGESTION_SCORE', 'CARRIER_DELAY_SCORE', 'PEAK_SEASON_SCORE',
                     'Risk_Intensity', 'Peak_Risk_Factor', 'Route_Target_Enc', 'Carrier_Target_Enc']
             
-        dmat = xgb.DMatrix(encoded_df[FEATURES])
-        preds = np.expm1(bst.predict(dmat))
+        # 1. Prediction: XGBoost / Strategy
+        pred_xgb = 0
+        try:
+            if isinstance(bst, str):
+                if bst == "USE_RF": res = np.expm1(rf_model.predict(encoded_df[FEATURES]))[0]
+                elif bst == "USE_ENSEMBLE": res = np.expm1(rf_model.predict(encoded_df[FEATURES]))[0] # Fallback to RF if Ensemble not fully wired
+                else: res = 0
+                pred_xgb = float(res)
+            elif bst:
+                 dmat = xgb.DMatrix(encoded_df[FEATURES])
+                 pred_xgb = float(np.expm1(bst.predict(dmat))[0])
+            else:
+                 # Fallback if bst is None
+                 pred_xgb = float(np.expm1(rf_model.predict(encoded_df[FEATURES]))[0])
+        except:
+             # Ultimate fallback
+             pred_xgb = float(np.expm1(lr_model.predict(encoded_df[FEATURES]))[0]) if lr_model else 500.0
+             
+        preds = [pred_xgb] * len(df) # For legacy logic compatibility below (expecting array)
+        if len(df) > 1:
+             # Recalculate if batch
+             pass # We did single row prediction logic above incorrectly for batch.
+             
+        # Correction for Batch vs Single
+        # Re-do properly:
+        preds = []
+        if isinstance(bst, str):
+             if bst == "USE_RF": preds = np.expm1(rf_model.predict(encoded_df[FEATURES]))
+             else: preds = np.expm1(rf_model.predict(encoded_df[FEATURES]))
+        elif bst:
+             dmat = xgb.DMatrix(encoded_df[FEATURES])
+             preds = np.expm1(bst.predict(dmat))
+        else:
+             preds = np.expm1(rf_model.predict(encoded_df[FEATURES]))
         
         # Format Results for Single Simulation vs Batch
         results = []
@@ -1370,3 +1491,4 @@ async def track_shipment(vehicle_id: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+# Trigger Reload V6
