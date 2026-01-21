@@ -1,4 +1,4 @@
-                                                                          # PETA2 - Predictive ETA Analysis System
+# PETA2 - Predictive ETA Analysis System
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
