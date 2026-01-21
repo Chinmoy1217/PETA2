@@ -1,5 +1,13 @@
 fastapi
 uvicorn
+python-multipart
+pandas
+xgboost
+scikit-learn
+numpy
+snowflake-connector-python
+fastapi
+uvicorn
 pandas
 snowflake-connector-python
 xgboost
